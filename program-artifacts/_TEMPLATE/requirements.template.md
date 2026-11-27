@@ -1,5 +1,10 @@
 # Program Requirements — TEMPLATE
 
+> ⚠️ **RETIRED 2026-11 — do not start a spec from this file.** It was the blank form for pAIchart's requirements
+> generator, which is retired. It is kept, unmaintained, only because some checking tools read it, and it lacks newer
+> sections. Write a spec with [`docs/WRITING-A-SPEC.md`](../../docs/WRITING-A-SPEC.md), starting from a released use case
+> in `paichart/paichart-configs`, `usecases/`.
+
 > **🗑 AUTHORING NOTE — how to use this template.** Read it, author the document, delete this block.
 > Copy this file to `program-artifacts/<run-name>/requirements.md` and replace every
 > `{{PLACEHOLDER}}`. **Do not delete the ⚠️ clauses** — each one is tagged with the run that earned

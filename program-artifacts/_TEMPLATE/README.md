@@ -1,36 +1,32 @@
-# Program input artifacts — template
+# Program input artifacts — shared files
 
-Two files define a program run. Copy both, replace the placeholders, delete what does not apply.
+**To write a program spec, follow [`docs/WRITING-A-SPEC.md`](../../docs/WRITING-A-SPEC.md) and start from a released use
+case in [`paichart/paichart-configs`, `usecases/`](https://github.com/paichart/paichart-configs/tree/main/usecases).** Copy
+that use case's `requirements.md` and `topology.json` and change them for your system. Do not start from the files in
+this folder.
 
-```
-cp -r program-artifacts/_TEMPLATE program-artifacts/<run-name>
-mv <run-name>/requirements.template.md <run-name>/requirements.md
-mv <run-name>/topology.example.json    <run-name>/topology.json
-rm <run-name>/README.md <run-name>/writing-rules.md   # both are template-side only
-scripts/requirements-rules.py --insert <run-name>/requirements.md   # splice the canonical rules
-```
+⚠️ **`requirements.template.md` is retired (2026-11).** It was the blank form that pAIchart's requirements generator
+filled in, and the generator is retired too. The file stays here, unmaintained, only because some checking tools still
+read it. It lacks newer sections (for example the Config sources slots), so a spec started from it can fail checks that
+a spec copied from a released use case passes.
 
-`writing-rules.md` is deleted from the run directory on purpose: the splice reads the canonical copy
-in `_TEMPLATE`, and a second copy sitting in a run directory is the copy-fork this template exists to
-end.
+What this folder still provides:
 
-**Before you hand the file to a run**, two mechanical checks:
+| file | what it is |
+|---|---|
+| `writing-rules.md` | the canonical writing rules. `scripts/requirements-rules.py --insert` splices them into a spec, and `--check` verifies them (see below) |
+| `topology.example.json` | a commented example of the topology file's shape. A released use case's `topology.json` is the better starting point |
+| `requirements.template.md` | retired, see above |
+
+**Before you hand a spec to a run**, check its size (the Program Architect reads a fixed amount):
 
 ```bash
-grep -c '^> \*\*🗑' <run-name>/requirements.md                    # must be 0 — author-only blocks
-grep -o '{{[^}]*}}' <run-name>/requirements.md | sort -u | wc -l # must be 0 — unfilled placeholders
-scripts/requirements-rules.py --check <run-name>/requirements.md # rules byte-identical to canonical
 scripts/requirements-rules.py --size-check <run-name>/requirements.md <run-name>/topology.json   # fits the reader?
 ```
 
 If `--size-check` says ✗, see **[If it does not fit: the program view](#if-it-does-not-fit-the-program-view)** below.
 
-| file | what it is |
-|---|---|
-| `requirements.template.md` | **what to do** — scope, objectives, approvals, acceptance |
-| `topology.example.json` | **what exists** — the environment, and which values are runtime-derived |
-
-**Audience**: the Program Architect reads **only these two files** and has **no live state access**.
+**Audience**: the Program Architect reads **only the two files of a spec** (`requirements.md` and `topology.json`) and has **no live state access**.
 Anything it must know has to be here. Anything it *cannot* know must be declared runtime, or it will
 guess.
 
@@ -74,8 +70,8 @@ scripts/requirements-rules.py --size-check   <run-name>/requirements.program.md 
 the omission is deliberate, the rule numbers the body cites are explained, and two reading properties are carried
 (expected values are reference data, never evidence; a crossing value is what its producing leg derives at run time).
 The tool refuses if the body cites a rule the note does not explain, and refuses to overwrite `requirements.md`.
-**Keep both files**: the program fetches `requirements.program.md`; `requirements.md` stays the copy people and
-generators work from. A ⚠️ means it fits with under 5,000 characters spare — prefer trimming author-facing prose from
+**Keep both files**: the program fetches `requirements.program.md`; `requirements.md` stays the copy people
+work from. A ⚠️ means it fits with under 5,000 characters spare — prefer trimming author-facing prose from
 the body; never raise a reader's page cap to fit one document. Worked example:
 [`telemetry-export-genspec-t1zero-v2/`](../telemetry-export-genspec-t1zero-v2/) (its `PUBLISH-NOTES.md` records the check).
 
@@ -117,9 +113,8 @@ rules were written out by hand or by a model is repaired **and told it was repai
 prints a diff rather than a verdict, because an altered rule that reads correct is how all three
 defects hid.
 
-⚠️ **Who actually reads these rules — re-measured 2026-10-12: no agent reads the spliced text.** The
-generator's Author emits only the marker, and its Reviewer checks that the section holds no rule prose;
-both receive the rules' obligations through their own role guidance. The **Program Architect** reads
+⚠️ **Who actually reads these rules — re-measured 2026-10-12: no agent reads the spliced text.** (The
+requirements generator, retired 2026-11, never read it either: its Author emitted only the marker.) The **Program Architect** reads
 the document's BODY verbatim, but it fetches the program view, where this section is replaced by short
 reading notes, and its guidance says the rules bind the author and reviewer, not it (on a full
 document it skips the section). **No agent downstream sees `requirements.md` at all**: 0 of 197
@@ -190,8 +185,9 @@ exactly this, and re-run clean, which is the only reason its result was usable.*
 
 ## Curating this template
 
-When a run teaches something durable, it belongs **here**, not only in that run's instance — that is
-the mistake this replaces. Add the clause, **tag it with the run**, and keep it stated as a property.
+When a run teaches something durable, it belongs in **[`docs/WRITING-A-SPEC.md`](../../docs/WRITING-A-SPEC.md)** (and,
+for a rule every spec must carry, in `writing-rules.md`), not only in that run's instance. Add the clause, **tag it with
+the run**, and keep it stated as a property. The retired `requirements.template.md` is no longer curated.
 
 Related platform-side guidance (in `copov15`):
 - `.claude/knowledge/pipelines/PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md` — designing a program
