@@ -340,7 +340,7 @@ grep -c "^export function assessExecutionQuality" lib/agents/harness/execution-q
 grep -c "_failedToolCallsForCorrection" lib/agents/harness/agentic-tool-loop.ts            # expect >=1 — the correction turn's trigger lives in the shared loop
 grep -c "^export function buildExecutionResultJson\|^export function deriveChainedContextSignal" lib/services/execution-artifacts.ts   # expect 2
 test -e scripts/test-template-scope-matcher.ts && echo present || echo deleted              # expect deleted
-npm run -s test:pipeline-protocol-validator | grep -c "Passed: "                            # expect 1 (61 checks on 2026-11-21 — a floor, not an exact count)
+npm run -s test:pipeline-protocol-validator | grep -c "Passed: "                            # expect >=1 (one summary line; 61 checks on 2026-11-21)
 ```
 
 **Not re-verified in this sweep:** the exact trigger regexes in the signal tables (P7's inability pattern, P10's first-300-chars

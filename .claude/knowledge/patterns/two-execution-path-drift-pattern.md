@@ -232,7 +232,7 @@ Every expectation below was run before it was written:
 
 ```bash
 grep -c "task\.update(\|task\.updateMany(" lib/services/agentExecutionEngine.ts          # expect 0 — the engine writes no task completion
-grep -c "runExecutionCore(" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 1 and 1 — both callers delegate
+grep -c "runExecutionCore(" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 2 — one line per file, 1 in each: both callers delegate
 grep -c "ONE copy of the PIPELINE 4-point completion invariant" lib/tasks/services/complete-task-terminally.ts   # expect 1
 grep -c "invariant clone was deleted" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # expect 1 — the handler carries a pointer comment only
 grep -c "bypasses persistTerminalFailure" lib/services/agentExecutionEngine.ts              # expect 1 — the reaper's own statement

@@ -1238,6 +1238,7 @@ lib/pov/hooks/usePOVList.ts
 lib/pov/hooks/useTaskSelection.ts
 lib/pov/integration/phase-template-selector.tsx
 lib/pov/integration/template-service-integration.ts
+lib/pov/metadata-merge.ts
 lib/pov/phase-templates/import-export.ts
 lib/pov/phase-templates/schema-registry.ts
 lib/pov/phase-templates/schema.ts
@@ -1671,6 +1672,7 @@ scripts/fixtures/rollback-containment/r3b2-author.md
 scripts/fixtures/rollback-containment/r3b2-harvest.md
 scripts/fixtures/service-descriptors/corpus-contracts.json
 scripts/fixtures/validation-tool-calls/network-legs-2026-10-23.json
+scripts/gate-check-contract-files.ts
 scripts/gate-check-spec.ts
 scripts/gate-check.ts
 scripts/generate-jwt-keys.sh
@@ -1880,6 +1882,7 @@ scripts/test-config-sources-p2.ts
 scripts/test-config-sources-read-rule.ts
 scripts/test-config-sources-step3.ts
 scripts/test-config-sources.ts
+scripts/test-consumed-values-family.ts
 scripts/test-containment-enrichment-branches.ts
 scripts/test-containment-public-parity.ts
 scripts/test-context-builder-parity.ts
@@ -2022,6 +2025,8 @@ scripts/test-pov-create-direct-path.ts
 scripts/test-pov-create-status.ts
 scripts/test-pov-cross-tenant-p1.ts
 scripts/test-pov-field-filtering.ts
+scripts/test-pov-metadata-merge-behavioral.ts
+scripts/test-pov-metadata-merge.ts
 scripts/test-pov-security.ts
 scripts/test-pov-stage-routes.ts
 scripts/test-pov-status-filter.ts

@@ -52,7 +52,7 @@ for f in .claude/agents/*-specialist.md; do
   total=$((total+1))
 
   # Skip retired tombstones (reliable markers only)
-  if grep -qE "^description: RETIRED|^# ⚰️ RETIRED" "$f"; then
+  if grep -qE "^description: (RETIRED|RENAMED)|^# ⚰️ (RETIRED|RENAMED)" "$f"; then
     tombstone=$((tombstone+1))
     continue
   fi

@@ -270,8 +270,10 @@ is listening — and
 (`descriptors/descriptor.schema.json` and `descriptors/SPEC.md`).
 
 ### 9b. A service on your own network — the shipped Browser Automation Service (programs need it)
-Programs ([FIRST-RUN.md](FIRST-RUN.md)) fetch their design artifacts — `requirements.md`, `topology.json` — through a browser-automation
-service the hub calls; the hub has no URL-fetch tool of its own, by design: the fetch runs in a container, not in the hub
+Programs ([FIRST-RUN.md](FIRST-RUN.md)) fetch web documents through a browser-automation service the hub calls: a service's
+descriptor, and a design artifact (`requirements.md`, `topology.json`) kept in a repository other than the one your Git file
+source reads (step 9c). A design artifact in that repository is read through the Git file source instead, and the hub refuses
+a browser fetch of it. The hub has no URL-fetch tool of its own, by design: the fetch runs in a container, not in the hub
 process. This repo ships that service (`services/browser-automation-service` — Playwright, no keys) and a compose file that
 runs only it. Needs Docker (step 3's Docker block); the image is a 1.5 GB download (~3 GB on disk) and the container is
 capped at 1.5 GB RAM.
@@ -302,12 +304,14 @@ Then in Claude Code, the same shape as step 9:
    → `registry(action: 'tools', service_name: 'Browser Automation Service')` → 7 tools with full schemas
    (`scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`).
 2. *"Through the hub, ask the browser-automation-service to `scrape_page`
-   `https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/requirements.md`
-   with selectors `{doc: 'pre'}`, and show me the call and the result."*
+   `https://raw.githubusercontent.com/paichart/paichart/main/descriptors/context7-descriptor.json`
+   with selectors `{descriptor: 'pre'}`, and show me the call and the result."*
    → `services(action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', …)` → `success: true`
-   and the document's text, *through your hub* — exactly the call a program's Program Architect makes.
-   **Check the text contains the spec's `## Device sources` lines** (`ceos1: git-file — service github-service ; …`, `ceos2: …`). They
-   prove you are reading the spec your first run launches ([FIRST-RUN.md](FIRST-RUN.md), section 2).
+   and the descriptor's JSON (it names `context7-docs`), *through your hub* — the call a pipeline makes to fetch a service
+   descriptor.
+   (Do not test it on a file in `paichart/paichart-configs`: that is the repository your Git file source reads, and the hub refuses
+   a browser read of it with "Blocked: this repository is a pinned Git file source". Step 9c reads your first run's spec the
+   right way.)
 
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
@@ -375,6 +379,10 @@ Same rule as 9b: run the seed from the clone you are testing.
 1. *"Through the hub, ask github-service to `get_file_contents` owner `<owner>`, repo `<repo>`, path `<a file in it>`, ref
    `main`."* (with the shipped pin: owner `paichart`, repo `paichart-configs`, path `network/base/ceos2-startup.cfg`) → the file's text and the commit it was read at.
 2. The same call with any other repo → refused: "repo is outside the file source pin" (logged as `PINNED_ARGUMENT`). That refusal is the pin working.
+3. *"Through the hub, ask github-service to `get_file_contents` owner `paichart`, repo `paichart-configs`, path
+   `usecases/loopback-ceos2/git-only/requirements.md`, ref `main`."* — this is the call your first run's Program Architect makes to
+   read its spec. **Check the text contains the spec's `## Device sources` lines** (`ceos1: git-file — service github-service ; …`,
+   `ceos2: …`). They prove you are reading the spec your first run launches ([FIRST-RUN.md](FIRST-RUN.md), section 2).
 
 Rotation: replace the token line in `services/github-service/.env`, then `docker compose -f docker-compose.self-host.yml
 --profile git up -d`. Anything on this host that can reach `127.0.0.1:3110` gets the token added to its requests (the same
@@ -405,8 +413,8 @@ Two things come with the clone that make step 8 more than a connector:
   - *"Register my weather service at http://127.0.0.1:3105/mcp with its full tool schemas"* → `registry(action: 'register', …)`
     (an example — you have no such service yet; do not run it)
     (a private address needs the allowlist line in [RUNNING.md](RUNNING.md) § "Registering a service on your own network").
-  - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)` (also an
-    example: it names a service from a lab you have not set up).
+  - *"Run the health check on context7-docs, then ask it to resolve the library id for prisma"* → `services(action: 'health' / 'call', …)`
+    (the service you registered in step 9; a `statusCode: 405` beside `available: true` is the normal health answer).
 - **Programs and pipelines.** For a multi-specialist delivery — a reviewed change package from a requirements
   document and a topology — you don't drive the steps yourself; the harness does (plan, the plan-approval gate, the
   legs, synthesis, the verdict). [FIRST-RUN.md](FIRST-RUN.md) launches one call by call. The in-hub guides are

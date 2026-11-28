@@ -359,10 +359,14 @@ UNION ALL SELECT '🔴 quoteFidelity stamped on a role that is neither a harvest
   count(*)::text FROM _a WHERE name = 'result.json' AND j ? 'quoteFidelity' AND coalesce(j->>'agentRole','') !~* 'harvest|author'
 UNION ALL SELECT '🔴 quoteFidelity BLOCKING on a checked fact (A1: a finding never blocks)',
   count(*)::text FROM leaf WHERE q->>'checked' = 'true' AND q->'quoteFidelityDisposition'->>'disposition' = 'blocking'
+-- Escalating = blocks.escalating + deviceReads.escalating: a rebuilt device-read claim escalates too (quoteFidelity v3+,
+-- quote-fidelity.ts header). Keyed on blocks only, 4 correct v8 leaves read as 🔴 at the 2026-11-28 health run.
 UNION ALL SELECT '🔴 disposition disagrees with the findings (needs-node-c with 0 escalating, or benign with >0)',
   count(*)::text FROM leaf WHERE q->>'checked' = 'true' AND (
-    (q->'quoteFidelityDisposition'->>'disposition' = 'needs-node-c' AND coalesce((q->'blocks'->>'escalating')::int, 0) = 0)
-    OR (q->'quoteFidelityDisposition'->>'disposition' = 'benign' AND coalesce((q->'blocks'->>'escalating')::int, 0) > 0))
+    (q->'quoteFidelityDisposition'->>'disposition' = 'needs-node-c'
+       AND coalesce((q->'blocks'->>'escalating')::int, 0) + coalesce((q->'deviceReads'->>'escalating')::int, 0) = 0)
+    OR (q->'quoteFidelityDisposition'->>'disposition' = 'benign'
+       AND coalesce((q->'blocks'->>'escalating')::int, 0) + coalesce((q->'deviceReads'->>'escalating')::int, 0) > 0))
 UNION ALL SELECT '⚪ E1 raw witness live since (derived: first rollback stamp carrying `witness`; empty ⇒ nothing measured)',
   coalesce(to_char((SELECT f FROM rfloor), 'YYYY-MM-DD HH24:MI'), '(empty)')
 UNION ALL SELECT '🔴 rollbackContainment checked:true since the E1 floor WITHOUT `witness` (a stamp still read the transcription)',
@@ -591,8 +595,14 @@ WITH gcalls AS (
   SELECT a.eid, tc.v,
          coalesce(tc.v->'result'->'content'->0->'data'->>'targetService',
                   CASE WHEN jsonb_typeof(tc.v->'arguments') = 'object' THEN tc.v->'arguments'->>'targetService' END) svc,
+         -- The inner arguments are stored as an object OR a JSON string; a string read as NULL counted an in-pin call
+         -- whose result was persist-truncated (no result data) as a pin break (2 false 🔴 at the 2026-11-28 health run).
          coalesce(tc.v->'result'->'content'->0->'data'->'arguments',
-                  CASE WHEN jsonb_typeof(tc.v->'arguments'->'arguments') = 'object' THEN tc.v->'arguments'->'arguments' END) sa,
+                  CASE WHEN jsonb_typeof(tc.v->'arguments'->'arguments') = 'object' THEN tc.v->'arguments'->'arguments'
+                       WHEN jsonb_typeof(tc.v->'arguments'->'arguments') = 'string' THEN
+                            CASE WHEN pg_input_is_valid(tc.v->'arguments'->>'arguments', 'jsonb') THEN
+                                 CASE WHEN jsonb_typeof((tc.v->'arguments'->>'arguments')::jsonb) = 'object'
+                                      THEN (tc.v->'arguments'->>'arguments')::jsonb END END END) sa,
          tc.v->>'success' = 'true' AND coalesce(tc.v->'result'->>'isError', 'false') <> 'true' AS ok
     FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'toolCalls') = 'array' THEN a.j->'toolCalls' ELSE '[]' END) tc(v)
    WHERE a.name = 'result.json' AND tc.v->>'tool' = 'services'),

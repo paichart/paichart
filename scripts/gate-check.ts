@@ -29,6 +29,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { DEVICE_SOURCE_LANES, deviceSourceContractKeyOf } from '../lib/agents/harness/held-bytes/variant';
 import { configSourcesReadKeys } from '../lib/agents/harness/plan-spawn-carry';
 import { compareSpecToContract, printable } from './gate-check-spec';
+import { contractFilesOf } from './gate-check-contract-files';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -83,7 +84,7 @@ async function planGate(tx: Tx, gate: T, architect: T, spec: { path: string; tex
     const tok = tokenOf(l.title), m = meta(l), src = isObj(m.interfaceContractSource) ? m.interfaceContractSource : {};
     const ic = isObj(l.inputContext) && isObj((l.inputContext as Record<string, unknown>).interfaceContract) ? (l.inputContext as Record<string, Record<string, unknown>>).interfaceContract : null;
     // the contract carries every domain's entry; show only THIS leg's (keyed by its protocol token)
-    const repos = ic ? Object.entries(ic).filter(([k, v]) => k === tok && isObj(v) && isObj((v as Record<string, unknown>).configRepo)).map(([, v]) => JSON.stringify((v as Record<string, unknown>).configRepo)) : [];
+    const named = contractFilesOf(tok, ic);
     const kind = tok.includes('derivation') ? 'VALUE' : 'CHANGE';
     console.log(`    leg ${l.id}  ${kind}  (protocol: ${tok})  ${l.title.slice(0, 70)}`);
     line(m.requiresInterfaceContract === true && !!ic, `      holds the interface contract (source: ${String(src.source ?? src.arm ?? '—')})`);
@@ -98,7 +99,10 @@ async function planGate(tx: Tx, gate: T, architect: T, spec: { path: string; tex
       line(sdf.failed === true || unk ? false : null, `      service descriptors (platform-derived): from the read lines ${list(sdf.derived)} · replaced ${list(sdf.replaced)} · removed ${list(sdf.removed)}`
         + `${unk ? ` · NOT a protocol name, left as written: ${list(sdf.unknownKeys)}` : ''}${sdf.failed === true ? ' · derivation FAILED — the plan\'s values were stored as written' : ''}`);
     }
-    if (kind === 'CHANGE') line(repos.length > 0 || null, `      config files named in its contract: ${repos.length ? repos.join(' · ') : 'none (a service-held or device leg — check its descriptor)'}`);
+    if (kind === 'CHANGE') {
+      for (const pr of named.problems) line(false, `      ${pr}`);
+      line(named.files.length > 0 || null, `      config files named in its contract: ${named.files.length ? named.files.join(' · ') : 'none (no configRepo, no Git-file or kept line under this leg\'s Device or Config sources key)'}`);
+    }
   }
   if (spec) {
     // Plan W11 (warn, not block): the spec's sources blocks against the contract each leg holds. The legs' own task text is read too

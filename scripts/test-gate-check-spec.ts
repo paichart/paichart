@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { compareSpecToContract, printable, specTokens, SPEC_FINDER_ERROR_CAP, type SpecLeg } from './gate-check-spec';
+import { contractFilesOf } from './gate-check-contract-files';
 import { obsNoPlaceholderKey } from './canary-req-sources';
 import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { configSourcesReadKeys } from '../lib/agents/harness/plan-spawn-carry';
@@ -382,6 +383,45 @@ test('R3 the gate report: the option is read only at a plan gate, its lines go t
   // every process.exit in the report is a usage or not-found exit (2) or the top-level crash handler (1) — none reads `fails`
   assert(!/process\.exit\(\s*fails/.test(src) && !/exit\([^)]*fails/.test(src), 'the report\'s exit code must not depend on a ✗');
   assert(/if \(spec && !specUsed\)/.test(src), 'a --spec given at a non-plan gate must be SAID, not silently ignored');
+});
+
+// ── GATE-REPORT-CONFIG-FILES-LINE (2026-11-28): the PLAN gate's "config files named in its contract" line reads the leg's OWN
+// Device / Config sources key with the shipping parsers. Shapes copied from the 2026-11-26 canaries' stored contracts (Kubernetes:
+// the block stored as ONE string with its heading; Terraform: an array of lines; network: Device sources lines).
+const K8S_BLOCK = '## Config sources\nsample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml\ncluster: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json';
+const TF_LINES = ['archive-tf: git-file — service github-service ; paichart/paichart-configs/terraform/archive.tf', 'prod-state: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json'];
+const NET_BLOCK = '## Device sources\nceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg\nceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json';
+test('GC1 a Kubernetes leg: the Config sources Git file is named (it read "none" before)', () => {
+  const r = contractFilesOf('kubernetes-gitops', { configSources: { 'kubernetes-gitops': K8S_BLOCK } });
+  eq(r.problems, []); eq(r.files, ['sample-workloads: paichart/paichart-configs/k8s/sample-workloads.yaml (Git, kept)']);
+});
+test('GC2 a Terraform leg (array form): named; the live-read line is evidence and not listed', () => {
+  const r = contractFilesOf('terraform-iac', { configSources: { 'terraform-iac': TF_LINES } });
+  eq(r.problems, []); eq(r.files, ['archive-tf: paichart/paichart-configs/terraform/archive.tf (Git, kept)']);
+});
+test('GC3 a network leg: Device sources git-file and device-read both named', () => {
+  const r = contractFilesOf('network-provisioning', { deviceSources: { 'network-provisioning': NET_BLOCK } });
+  eq(r.problems, []); eq(r.files, ['ceos1: paichart/paichart-configs/network/base/ceos1-startup.cfg (Git, kept)', 'ceos1: running configuration (device read, kept)']);
+});
+test('GC4 only the leg\'s OWN key: a plan carrying another leg\'s block names nothing for this leg', () => {
+  const ic = { configSources: { 'kubernetes-gitops': K8S_BLOCK }, deviceSources: { 'network-derivation': NET_BLOCK } };
+  eq(contractFilesOf('terraform-iac', ic), { files: [], problems: [] });
+  eq(contractFilesOf('kubernetes-gitops', ic).files.length, 1);
+});
+test('GC5 an unparseable block is a PROBLEM, never "none"; the legacy configRepo is still named', () => {
+  const bad = contractFilesOf('terraform-iac', { configSources: { 'terraform-iac': { not: 'lines' } } });
+  assert(bad.problems.length === 1 && /unparseable/.test(bad.problems[0]) && bad.files.length === 0, JSON.stringify(bad));
+  const legacy = contractFilesOf('kubernetes-gitops', { 'kubernetes-gitops': { configRepo: { owner: 'o', repo: 'r', paths: ['k8s/a.yaml'] } } });
+  eq(legacy.files, ['configRepo {"owner":"o","repo":"r","paths":["k8s/a.yaml"]}']);
+});
+test('GC6 no contract, or a token with no lane: nothing, no throw', () => {
+  eq(contractFilesOf('kubernetes-gitops', null), { files: [], problems: [] });
+  eq(contractFilesOf('artifact-synthesis', { configSources: {} }), { files: [], problems: [] });
+});
+test('GC7 gate-check.ts uses the helper (the legacy configRepo-only read is gone)', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'gate-check.ts'), 'utf8');
+  assert(/contractFilesOf\(tok, ic\)/.test(src), 'the plan gate must call contractFilesOf');
+  assert(!/none \(a service-held or device leg — check its descriptor\)/.test(src), 'the old misleading "none" wording is back');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

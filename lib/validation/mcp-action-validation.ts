@@ -467,6 +467,8 @@ export const MCPParameterSchemas = {
     // phaseTemplateIds intentionally excluded per v3.1 (legacy product feature)
 
     // ── Metadata (BC27 stripping happens per-nested-field via safeRecord) ──
+    // MERGED by the handler (lib/pov/metadata-merge.ts): a nested null value is KEPT here — it is
+    // the "remove this key" signal. A top-level metadata: null is skipped (FormField transform).
     metadata: FormField.optional(safeRecord())
   })
   .strict()  // Surplus keys rejected (loud failure per val-engine #10 + arch-review #11)

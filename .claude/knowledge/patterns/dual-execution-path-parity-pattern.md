@@ -150,9 +150,9 @@ The pattern stays RETIRED; the historical record below the banner is unchanged. 
 Every expectation below was run before it was written:
 
 ```bash
-grep -c "prune: true" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts    # expect 1 and 1
+grep -c "prune: true" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts    # expect 2 — one line per file, 1 in each
 grep -c "prune: false" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 0 and 0
-grep -c "buildExecutionResultJson(" lib/services/execution-core.ts lib/services/execution-completion-anchored.ts   # expect 1 and 1 — the core and the rescue builder
+grep -c "buildExecutionResultJson(" lib/services/execution-core.ts lib/services/execution-completion-anchored.ts   # expect 2 — one line per file, 1 in each: the core and the rescue builder
 grep -c "runDiagnosticRetry(" lib/services/execution-core.ts                                             # expect 1 — the retry runs in the core
 ```
 

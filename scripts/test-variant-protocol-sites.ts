@@ -132,6 +132,8 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
   'scripts/test-canary-req-sources.ts::CFG_GOOD': 'Config sources canary control (2026-11-27) fixture: an interfaceContract.configSources keyed by the config protocols\' own contract keys (terraform-iac, kubernetes-gitops) - a contract shape, not a protocol selection; the held variant is a capability of observability-config, not a key',
   'scripts/test-canary-req-sources.ts::<top>':
     'first generated network spec canary (2026-11-10) fixtures: leg carriers stamped with the network protocols (value and change lane) and contracts keyed by their contract keys - a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/test-consumed-values-family.ts::KNOWN_MISSING':
+    'Consumed Values family drift test (2026-11-28, obligation audit F-N1): a counted exception keyed by the two protocols whose TEXT lacks one family sentence until the final text release — a text-presence exception, not a protocol selection; the held variant is a capability of observability-config, not a protocol row with its own text',
   'lib/agents/harness/config-sources-read-rule.ts::CONFIG_SOURCES_READ_RULE_PROTOCOLS':
     'the Config sources READ RULE allow-list (which declared Harvesters get the read-rule paragraph; widened to kubernetes-gitops + terraform-iac 2026-11-26 after the widening controls) — a Config-sources prompt property, not held-capability; the retired obs variant declares no Config sources',
   'scripts/canary-req-sources.ts::READ_RULE_WIDENED_PROTOCOLS':

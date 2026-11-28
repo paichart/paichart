@@ -105,7 +105,11 @@ async function main() {
         await router.route('task.create', { povId, phaseId: phase!.id, stageId: stage!.id, title, assignee: outsider.email }, userToken, 'boundary-n5');
       } catch (e: any) { err = e?.message ?? String(e); }
       const rows = await prisma.task.count({ where: { title } });
-      check('N5 non-admin + non-team-member name → throws (task.assign M2 parity), NO row', err.includes('not a member of this POV team') && rows === 0, `${err.slice(0, 70)} rows=${rows}`);
+      // Since ASSIGNEE-DIRECTORY-DISCLOSURE (7950b859a, 2026-10-31) a non-admin's search covers only the POV team, so an
+      // outsider is refused as not found before the membership check. The property is the refusal and no row, not the wording.
+      const refused = err.includes('was not applied and no task was created')
+        && (err.includes('not a member of this POV team') || /not found/i.test(err));
+      check('N5 non-admin + non-team-member name → throws (task.assign M2 parity), NO row', refused && rows === 0, `${err.slice(0, 120)} rows=${rows}`);
     } else {
       console.log('⚪ N5 skipped — no user outside the POV team in this dev DB (unmeasured, not passed)');
     }

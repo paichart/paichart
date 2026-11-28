@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { FIELD_LIMITS } from '@/lib/validation/field-limits';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { sanitizePovMetadata } from '@/lib/pov/sanitize-metadata';
+import { planPovMetadataPatch, isEmptyPovMetadataPlan, mergePovMetadata, type PovMetadataPlan } from '@/lib/pov/metadata-merge';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { validateTaskStatusTransition } from '@/lib/tasks/services/status-transitions';
 import { povListCache } from '@/app/api/pov/pov-cache';
@@ -516,6 +517,18 @@ export async function updatePoVHandler(
     }
   }
 
+  // 2026-11-28 (POV-UPDATE-METADATA-REPLACES-WHOLE): metadata is MERGED, never written whole —
+  // sent keys are set, a key sent as null is removed, unsent keys are kept (lib/pov/metadata-merge.ts,
+  // the same helper MCP pov.update uses). It leaves cleanPovData so povService.update never writes
+  // the column; the merge runs in SQL below. The editor sends its whole loaded object, so its saves
+  // are unchanged; a partial REST body no longer drops the keys it did not send.
+  let metadataPlan: PovMetadataPlan | undefined;
+  if (cleanPovData.metadata !== undefined && cleanPovData.metadata !== null
+      && typeof cleanPovData.metadata === 'object' && !Array.isArray(cleanPovData.metadata)) {
+    metadataPlan = planPovMetadataPatch(cleanPovData.metadata as Record<string, unknown>);
+  }
+  delete cleanPovData.metadata;
+
   povLogger.debug({ povId, hasPhases: !!cleanPovData.phases, hasStages: !!cleanPovData.stages, hasTasks: !!cleanPovData.tasks }, 'clean POV data relation check');
 
     // Phase 2 stage_activities (2026-04-26): captured per-stage diffs for
@@ -527,6 +540,16 @@ export async function updatePoVHandler(
       before: { name: string | null; description: string | null; status: string; order: number };
       after: { name: string | null; description: string | null; status: string; order: number };
     }> = [];
+
+    // Metadata merge in its OWN short transaction, BEFORE the main one: povService.update below writes
+    // through the base client, so holding this row's FOR UPDATE lock inside the main tx would make it
+    // wait on itself. Running first also means povService.update's re-read returns the merged object.
+    if (metadataPlan && !isEmptyPovMetadataPlan(metadataPlan)) {
+      const plan = metadataPlan;
+      const merged = await prisma.$transaction((tx) => mergePovMetadata(tx, povId, plan));
+      if (!merged) throw new Error(`Failed to update POV with ID: ${povId}`);
+      povLogger.info({ povId, metadata: merged.report }, 'POV metadata merged');
+    }
 
     // Use a transaction to ensure atomic operations
     const pov = await prisma.$transaction(async (tx) => {

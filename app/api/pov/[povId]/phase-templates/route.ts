@@ -108,16 +108,15 @@ export const POST = withPOVAccess(async (
     }
     const data = validation.data;
 
-    // Update the POV metadata with the phase template IDs
-    const metadata = ensureObject(pov.metadata, {}, 'POV metadata') as Record<string, any>;
-
-    metadata.phaseTemplates = data.phaseTemplateIds;
-    
-    // Save the updated metadata
-    await prisma.pOV.update({
-      where: { id: povId },
-      data: { metadata }
-    });
+    // Set ONLY metadata.phaseTemplates, atomically in SQL (2026-11-28, POV-UPDATE-METADATA-REPLACES-WHOLE
+    // sibling sweep): was a read-spread-write of the whole object, which lost any key another writer set
+    // between the read and the write (BC19 lost-update shape).
+    await prisma.$executeRaw`
+      UPDATE "POV"
+         SET metadata = CASE WHEN jsonb_typeof(metadata) = 'object' THEN metadata ELSE '{}'::jsonb END
+                        || jsonb_build_object('phaseTemplates', ${JSON.stringify(data.phaseTemplateIds)}::jsonb),
+             "updatedAt" = NOW()
+       WHERE id = ${povId}`;
     
     // Create phases from templates
     if (data.phaseTemplateIds.length > 0) {

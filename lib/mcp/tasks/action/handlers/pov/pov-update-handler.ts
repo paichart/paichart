@@ -38,6 +38,13 @@ import { MCPParameterSchemas } from '@/lib/validation/mcp-action-validation';
 import { applyTeamUpdate } from '@/lib/pov/services/team';
 import { statusService } from '@/lib/pov/services/status';
 import { mapPoVToResponse } from '@/lib/pov/prisma/mappers';
+import {
+  planPovMetadataPatch,
+  isEmptyPovMetadataPlan,
+  mergePovMetadata,
+  describePovMetadataReport,
+  type PovMetadataReport,
+} from '@/lib/pov/metadata-merge';
 
 const log = mcpLogger.child({ module: 'POVUpdateHandler' });
 
@@ -148,15 +155,26 @@ export async function handlePOVUpdate(
   if (params.revenue !== undefined) updateData.revenue = params.revenue;
   if (params.countryId !== undefined) updateData.country = { connect: { id: params.countryId } };
   if (params.regionId !== undefined) updateData.region = { connect: { id: params.regionId } };
-  if (params.metadata !== undefined) {
-    updateData.metadata = params.metadata as Prisma.InputJsonValue;
-  }
+  // metadata is MERGED, never written whole (2026-11-28, POV-UPDATE-METADATA-REPLACES-WHOLE):
+  // sent keys are set, a key sent as null is removed, unsent keys are kept. The merge runs in SQL
+  // inside the transaction below (lib/pov/metadata-merge.ts) — it is NOT part of updateData.
+  const metadataPlan = params.metadata !== undefined
+    ? planPovMetadataPatch(params.metadata as Record<string, unknown>)
+    : undefined;
+  let metadataReport: PovMetadataReport | undefined;
 
   // ── 7. $transaction: POV scalar update + team management (atomicity per arch-review B1) ──
   // Note (v3.1): phaseTemplateIds is NOT exposed in MCP pov.update. Legacy
   // product feature — not propagated to new surfaces. REST still uses
   // ensurePhasesFromTemplates for its own callers; MCP doesn't touch that path.
   const updatedPov = await prisma.$transaction(async (tx) => {
+    // 7a-0. Merge metadata atomically (row locked FOR UPDATE; report = fact about the replaced row).
+    if (metadataPlan && !isEmptyPovMetadataPlan(metadataPlan)) {
+      const merged = await mergePovMetadata(tx, params.povId, metadataPlan);
+      if (!merged) throw new Error(`POV not found: "${params.povId}"`);
+      metadataReport = merged.report;
+    }
+
     // 7a. Apply POV-scalar updates (single Prisma update)
     const povUpdated = await tx.pOV.update({
       where: { id: params.povId },
@@ -202,6 +220,7 @@ export async function handlePOVUpdate(
   }
 
   const updatedFields = Object.keys(updateData);
+  if (metadataReport) updatedFields.push('metadata');
   // 2026-08-19 (morning-list #7): team writes go through applyTeamUpdate, not
   // updateData — a team-only update used to report "0 fields changed" while it
   // wrote TeamMember rows (observed live: an OWNER-row restore reported 0).
@@ -209,9 +228,10 @@ export async function handlePOVUpdate(
     if ((params as Record<string, unknown>)[f] !== undefined) updatedFields.push(f);
   }
   log.info(
-    { actionId, povId: params.povId, fieldsUpdated: updatedFields },
+    { actionId, povId: params.povId, fieldsUpdated: updatedFields, metadata: metadataReport },
     'POV update complete'
   );
+  const metadataClause = metadataReport ? `; ${describePovMetadataReport(metadataReport)}` : '';
 
   return {
     actionId,
@@ -228,8 +248,10 @@ export async function handlePOVUpdate(
       summary: {
         fieldsUpdated: updatedFields,
         fieldCount: updatedFields.length,
+        // Present only when metadata keys were sent: which keys this write changed / removed / kept.
+        ...(metadataReport ? { metadata: metadataReport } : {}),
       },
-      message: `POV "${updatedPov.title}" updated successfully (${updatedFields.length} field${updatedFields.length === 1 ? '' : 's'} changed)`,
+      message: `POV "${updatedPov.title}" updated successfully (${updatedFields.length} field${updatedFields.length === 1 ? '' : 's'} changed${metadataClause})`,
     },
   };
 }

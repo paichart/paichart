@@ -51,9 +51,10 @@ from that repository and nothing else: no lab, no switches.
 - step 7 — the account you are signed in with is a **System Admin**. The services this run reads through are admin-only: an
   ordinary User account cannot complete it;
 - step 8 — your Anthropic key is saved and Claude Code is connected to your hub;
-- step 9b — the browser service is running and seeded (the plan step fetches the two input files through it);
+- step 9b — the browser service is running and seeded (programs fetch service descriptors, and specs kept outside your Git file
+  source's repository, through it);
 - step 9c — the GitHub file source is running and seeded, with `GIT_FILE_SOURCE_PIN=paichart/paichart-configs` (the default
-  in `.env.example`).
+  in `.env.example`) — the plan step reads the two input files through it, and both legs read their kept files through it.
 
 **What it costs:** the released run of this use case on 2026-11-11 used about USD 5.50 of Anthropic usage across 17 agent
 runs, and took 25 minutes including the time spent at its three gates.
@@ -275,6 +276,7 @@ The release is still your decision. A run can show every leg approved and the fi
 
 - [Operator runbook](OPERATING.md) — running programs day to day.
 - [Program spec checklist](WRITING-A-SPEC.md) — writing the two input files for a
-  change of your own. Put them in any repository whose raw URLs your hub's browser service can fetch; if a leg reads
-  configuration files from Git, that repository must be the one `GIT_FILE_SOURCE_PIN` names.
+  change of your own. Put them in the repository `GIT_FILE_SOURCE_PIN` names (the plan step then reads them through the Git file
+  source) or in any public repository (read through the browser service). If a leg reads configuration files from Git, those
+  files must be in the repository `GIT_FILE_SOURCE_PIN` names.
 - [Other use cases](https://github.com/paichart/paichart-configs/tree/main/usecases) in the configs repository.

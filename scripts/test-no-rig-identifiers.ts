@@ -38,9 +38,22 @@ const RIG_IDENTIFIERS = [
   'get_scrape_targets', 'get_rules', 'query_metric', 'get_otel_config', 'get_ingress_config', 'stack_health',
   'list_resource_names', 'list_resources', 'list_secret_names', 'get_resource',
   'state_list', 'state_pull', 'list_devices', 'fetch_data',
+  // added 2026-11-28 (obligation audit F4-1): the rest of each rig service's tool surface, read from the services' own
+  // source (~/paichart/usecases/*-lab), plus a rig-only RESULT field. The list was hand-picked before and missed these.
+  'get_prometheus_config', 'get_grafana_dashboard', 'get_grafana_datasources', 'list_grafana_dashboards', 'truncatedTo50',
+  'compare_manifest', 'compare_declared_fields',
+  'get_structured_data', 'list_network_devices', 'run_show_commands', 'send_commands', 'show_commands',
   // hosts / infra
   'paichart.app', 'localstack', 'k8s-rig-control-plane', 'promstack', 'devext', '192.168.86',
 ];
+
+/**
+ * Is this source line a JS COMMENT (skipped) rather than shipped text?
+ * ⚠️ 2026-11-28 (obligation audit F4-1): the old test, `^\s*(\/\/|\*|\/\*)`, also matched every line that starts with
+ * markdown `**bold**` — 87 such lines in protocol bodies went unscanned, which is how `query_metric` sat in the observability
+ * protocol while this guard passed. A JSDoc continuation is `*` followed by a space, `/` or end of line; `**` never is.
+ */
+const COMMENT_LINE = /^\s*(\/\/|\/\*|\*(?=\s|\/|$))/;
 
 /** Agent-facing consts: protocol bodies. Operator HOWTO/GUIDE consts are exempt. */
 const AGENT_FACING = /^const\s+(PIPELINE_[A-Z0-9_]*PROTOCOL|[A-Z0-9_]*ORCHESTRATOR_PROTOCOL)\s*=/;
@@ -65,7 +78,7 @@ function interpolatedIntoAgentFacing(lines: string[]): Set<string> {
     grew = false;
     for (const n of [...facing, ...found]) {
       for (const t of body.get(n) ?? []) {
-        if (/^\s*(\/\/|\*|\/\*)/.test(t)) continue;
+        if (COMMENT_LINE.test(t)) continue;
         for (const mm of t.matchAll(/\$\{([A-Z0-9_]{4,})\b/g)) {
           if (!facing.has(mm[1]) && !found.has(mm[1]) && body.has(mm[1])) { found.add(mm[1]); grew = true; }
         }
@@ -94,7 +107,7 @@ function scanSeed(): Hit[] {
     else if (/^`;/.test(text)) owner = '';
     if (!(AGENT_FACING.test(`const ${owner} =`) || interpolated.has(owner)) || EXEMPT.test(owner)) return;
     // Skip comment lines — changelog prose legitimately names the rig a run happened on.
-    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    if (COMMENT_LINE.test(text)) return;
     for (const id of RIG_IDENTIFIERS) {
       const at = text.indexOf(id);
       if (at >= 0) hits.push({ file, owner, id, line: i + 1, excerpt: text.slice(Math.max(0, at - 70), at + 70) });
@@ -112,7 +125,7 @@ function scanRoleGuidance(): Hit[] {
   const hits: Hit[] = [];
   const base = src.slice(0, start).split('\n').length;
   lines.forEach((text, i) => {
-    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    if (COMMENT_LINE.test(text)) return;
     for (const id of RIG_IDENTIFIERS) {
       const at = text.indexOf(id);
       if (at >= 0) hits.push({ file, owner: 'ROLE_GUIDANCE_LIBRARY', id, line: base + i, excerpt: text.slice(Math.max(0, at - 70), at + 70) });
@@ -133,7 +146,7 @@ function scanFormCorrection(): Hit[] {
   if (!src.includes('export function buildFormCorrectionPrompt')) throw new Error('buildFormCorrectionPrompt not found — this guard is scanning nothing');
   const hits: Hit[] = [];
   src.split('\n').forEach((text, i) => {
-    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    if (COMMENT_LINE.test(text)) return;
     for (const id of RIG_IDENTIFIERS) {
       const at = text.indexOf(id);
       if (at >= 0) hits.push({ file, owner: 'form-correction prompt', id, line: i + 1, excerpt: text.slice(Math.max(0, at - 70), at + 70) });
@@ -169,7 +182,7 @@ function scanRoleGuidanceServiceNames(): { hits: Hit[]; exempted: string[] } {
     const role = text.match(/^\s{2}'([a-z_]+)':/);
     if (role) owner = role[1];
     if (i < startLine) return; // the library and the builders after it; nothing above it ships to agents as role guidance
-    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    if (COMMENT_LINE.test(text)) return;
     for (const id of ROLE_GUIDANCE_SERVICE_NAMES) {
       const at = text.indexOf(id);
       if (at < 0) continue;
@@ -237,7 +250,31 @@ console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.l
   if (ug.includes('serviceDescriptors["<leg token>"]')) { console.log('❌ program_architect: the leg-token descriptor key is back'); process.exit(1); }
 }
 
-const hits = [...scanSeed(), ...scanRoleGuidance(), ...scanFormCorrection()];
+/**
+ * COUNTED EXCEPTION — shrinks, never grows (2026-11-28, obligation audit F4-1; owner sitting 1 decision 4). Fixing the
+ * comment-skip above surfaced observability-config 1.12.0 naming our rig service's tools. The text fix rides the final
+ * text release (CLOSE-OUT-PLAN Track C, Protocol 16). Until then these exact (protocol, identifier, count) hits pass; ANY
+ * other hit fails, and a listed hit that disappears fails too, so the exception is deleted with the text that owed it.
+ * Record: cline_docs/reviews/protocol-obligation-audit-2026-11-28/AUDIT.md (F4-1).
+ */
+const KNOWN_RIG_HITS: Record<string, number> = {
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL|get_prometheus_config': 2,
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL|get_grafana_dashboard': 1,
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL|get_grafana_datasources': 1,
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL|query_metric': 1,
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL|truncatedTo50': 1,
+};
+const allHits = [...scanSeed(), ...scanRoleGuidance(), ...scanFormCorrection()];
+const seen: Record<string, number> = {};
+for (const h of allHits) { const k = `${h.owner}|${h.id}`; seen[k] = (seen[k] ?? 0) + 1; }
+for (const [k, n] of Object.entries(KNOWN_RIG_HITS)) {
+  if ((seen[k] ?? 0) !== n) {
+    console.log(`❌ counted rig exception "${k}" expects ${n} hit(s), found ${seen[k] ?? 0} — the text moved: update or DELETE the exception (it shrinks, never grows)`);
+    process.exit(1);
+  }
+  console.log(`⚪ ${k.replace('|', ': ')} ×${n} — EXEMPT until the final text release (audit F4-1)`);
+}
+const hits = allHits.filter(h => !(`${h.owner}|${h.id}` in KNOWN_RIG_HITS));
 if (hits.length === 0) {
   console.log(`✅ no rig identifiers in agent-facing text (${RIG_IDENTIFIERS.length} identifiers checked)`);
   process.exit(0);
