@@ -19,9 +19,15 @@ your systems read-only through an open MCP hub.
 and two agents, so the same Claude session that installs pAIchart can then launch your first program, explain each approval gate
 and read you the result.
 
+No Docker yet? Do [INSTALL step 3](docs/INSTALL.md#3-prerequisites-the-docs-assume-node-24-postgresql-16-an-empty-database)'s
+Docker block first: it needs you to log out and back in, which Claude cannot do mid-session.
+
 ```bash
+sudo apt-get update && sudo apt-get install -y git curl
 git clone https://github.com/paichart/paichart.git ~/paichart && cd ~/paichart
 curl -fsSL https://claude.ai/install.sh | bash     # Claude Code, if you do not have it
+export PATH="$HOME/.local/bin:$PATH"               # where the installer puts claude, for this shell
+sudo -v                                            # Claude cannot type your sudo password
 claude
 ```
 
