@@ -1,232 +1,137 @@
-# pAIchart — high-level design in, reviewed low-level design out
+# pAIchart — a high-level design in, a reviewed change package out
 
-[![License: Elastic 2.0](https://img.shields.io/badge/license-Elastic--2.0-blue.svg)](LICENSE) — source-available: self-host, modify, redistribute; not as a hosted service to third parties.
+[![License: Elastic 2.0](https://img.shields.io/badge/license-Elastic--2.0-blue.svg)](LICENSE)
 
-Across network devices, Terraform, Kubernetes, and observability stacks (Prometheus / Grafana / OpenTelemetry) — on an open MCP hub. Give pAIchart a `requirements.md` and a `topology.json` at any fetchable location — and it returns a reviewed low-level design: per-device config, the exact commands that prove it worked, and a rollback. Your team applies it, idempotently and out of band. pAIchart designs and reviews the change; it never applies it.
+You describe an infrastructure change in a short requirements file. pAIchart turns it into a **program**: a graph of specialist AI
+agents that read your current configuration, work out the change, write it as exact edits, and review it. You get back a change
+package with the commands that prove it worked and a rollback. People approve at each gate, and your team applies the package.
+**pAIchart never applies a change.**
 
-The LLD is the bottleneck it removes. Producing one today means a senior engineer reading live state across every box, writing config in each vendor's language, and hand-reconciling the values that cross domains. pAIchart does that work as a graph of specialist agents, checks it in three tiers, and hands you one reviewed result to approve. You stop authoring across every system and start approving one package.
+It covers network devices, Terraform, Kubernetes and observability stacks (Prometheus / Grafana / OpenTelemetry), and reaches
+your systems read-only through an open MCP hub.
 
-## The directed acyclic graph (DAG) coordinates agents
+## Start here
 
-Other solutions give you a DAG of tasks. pAIchart gives you a DAG of reviewed changes.
+**Watch:** [what pAIchart does](https://www.youtube.com/watch?v=JZ_MSWYvOnc) (6 min) ·
+[install it and run your first program](https://www.youtube.com/watch?v=ytUNK9_xPwQ) (18 min).
 
-Every node is a domain pipeline of agents *harvest live state → design → author → review* and every edge carries a value that did not exist until runtime. Legs with no edge between them run in parallel; a dependency edge forces order and hands the real derived value forward.
+**Install, the way we recommend: let Claude Code do it from inside the repository.** The repository ships a prepared `CLAUDE.md`
+and two agents, so the same Claude session that installs pAIchart can then launch your first program, explain each approval gate
+and read you the result.
+
+```bash
+git clone https://github.com/paichart/paichart.git ~/paichart && cd ~/paichart
+curl -fsSL https://claude.ai/install.sh | bash     # Claude Code, if you do not have it
+claude
+```
+
+Then say: *"Follow docs/INSTALL.md from step 3, exactly as written. Stop after step 5 and tell me the printed password."*
+A few steps are yours, in a browser (your account, your API key). When the install is done, say:
+*"Follow docs/FIRST-RUN.md section 2."*
+
+**You need:** an Ubuntu 24.04 machine with about 16 GB RAM, an Anthropic API key (the first run costs about USD 6), a Claude
+account that can use Claude Code, and a GitHub account. **About an hour**, most of it the agents working.
+The full guide is [docs/INSTALL.md](docs/INSTALL.md); it also has the manual route, command by command.
+
+**Just want to look?** Sign in at [paichart.app](https://paichart.app) and browse finished program runs: every task, the agent
+that ran it, the gates a person released and the result. A first sign-in is a read-only demo account
+([what it holds](PRIVACY-DEMO.md)).
+
+## Programs: a graph of agents
+
+A **program** is one change, worked by several pipelines called **legs**. Each leg is four agents in a row:
+
+**read** the current state → **design** the change → **write** it as edits → **review** it
 
 ```
                     ┌──▶ [firewall leg] ──┐
-[network leg] ──────┼──▶ [cloud leg] ─────┼──▶ [integration review] ──▶ release gate
+[network leg] ──────┼──▶ [cloud leg] ─────┼──▶ [final review] ──▶ release
                     └──▶ [k8s leg] ───────┘
-     derived range                              checks all legs against
-     exists only after                          the one shared contract
-     this leg runs
+   works out a value                         checks every leg against
+   the others need                           one shared contract
 ```
 
-That's the difference between a graph and a script: the cloud leg authorises exactly the address range the network leg derived, because the cloud leg reads the content the network leg created. There are no pre-defined values in the high level design.
+- **Value legs and change legs.** A value leg works out something other legs need, such as a free address range, and changes
+  nothing. A change leg writes a change package. Legs with no link between them run in parallel; a link forces order and hands
+  the real value forward.
+- **The plan and the contract.** A planning agent reads your requirements and draws this graph, with a contract that says what
+  each leg must hand the next. Nothing runs until a person approves the plan.
+- **Gates.** A gate is a point where the program waits for a person: on the plan, on a value, on a change. The agents are never
+  asked to pass a gate. You release it from your AI client or the web app.
+- **A final review** checks all the legs together against the contract before anything is called releasable.
+- **Every step is a task you can open.** The graph is stored as ordinary tasks in a project, so each agent's input, output and
+  checks stay browsable after the run. (In graph terms a program is a directed acyclic graph, a DAG, of reviewed changes.)
 
-- multiple legs, parallel or sequenced, with context chaining and dependencies
-- Four infrastructure domains today — network devices, Terraform, Kubernetes, observability config (Prometheus / Grafana / OpenTelemetry) — plus artifact synthesis, and the shape is extensible: the observability domain was added as a configuration exercise (a protocol, four role templates, a read-only service descriptor), not an engine change
-- The graph is declared with the work, in a single `PIPELINE` task, not in a separate scheduler you also have to operate
-- Approval gates release from your AI client or the web UI, over one common code path
-- Live state comes from your devices, harvested read-only through per-device MCP servers
+More: [programs](docs/PROGRAMS.md) · [pipelines](docs/PIPELINES.md) · [gates](docs/GATES.md) ·
+[a whole program, step by step](docs/walkthroughs/PROGRAM-WALKTHROUGH.md) · [glossary](docs/GLOSSARY.md)
 
-## How correctness is checked using three tiers, and a lower one can't be overruled
+## Who says it is safe
 
-Tier 1 — arithmetic, in code. Where appropriate pAIchart uses code to do a deterministic check rather than an LLM reviewer's confidence. Every derived value is tagged with a **`kind`**, and the engine runs the arithmetic for that kind against the harvested evidence — never against the package's restated copy of it:
+Three tiers check a package, and a lower tier cannot be overruled by a higher one.
 
-- `cidr` — does the derived range cover exactly its declared members? Catches **too wide** (an already-allocated address swept in) and **too narrow** (a claimed member falling outside).
-- `asn` — is the AS number inside the private range, and does the harvested state authorize it? The relation deliberately inverts here: the harvest is the **allowlist** — an AS number the design sets must be one the devices already run, or one the objective explicitly names.
+1. **Arithmetic, in code.** Where a value can be checked mechanically, the platform's own code checks it against what was read
+   from your systems: is a derived address range exactly its declared members, is an AS number one your devices already run.
+   A check that could not run counts as a block, never as a pass.
+2. **Independent reviewers.** One reviewing agent per leg, and one across all legs against the shared contract.
+3. **The release rule.** A fixed AND: every leg approved, no arithmetic violation, every unchecked value explained, the final
+   review approved, every declared source read. No confidence score is in it.
 
-And when a `kind` isn't implemented, the platform says so. It records the value as *not mechanically covered* and escalates it to the integration reviewer — it never counts an unchecked value as a passed one. That path is verified end-to-end in VT-14: the reviewer named the uncovered value, traced its provenance, found it had no device config behind it, and blocked over two green legs and its own approval.
+**We publish the rounds we failed.** The [verification pack](verification/) holds 33 documents, each stating what it expected
+before the run and recording what happened. Among them:
 
-Tier 2 — independent reviewers. One per leg against its own contract, plus an integration reviewer across *all* legs against the shared contract — running the domain's own validators over the composed set (whole-topology [Batfish](https://batfish.org), `terraform plan`, `kubeconform`). It consumes those validators; it does not reimplement them.
+- a program that declared itself releasable while widening an authorization. Five checks passed it, so that property is now
+  checked in code;
+- two identical review runs that scored 45 and 92 on the same input. Confidence is now a recorded fact, not a pass mark;
+- three correct packages refused because a reviewer judged something it could not see. The comparison is now computed by the
+  platform and handed to the reviewer.
 
-Tier 3 — the release gate. A deterministic AND: every leg approved **AND** no containment violation **AND** any unchecked value carries a benign reason **AND** the integration reviewer approved **AND** coverage complete. No confidence number appears in it.
+## What it works on
 
-A Tier-1 violation blocks regardless of who approved above it.
+| Domain | You ask for | Read through | More |
+|---|---|---|---|
+| **Network devices** | "add a loopback per switch and advertise it into BGP" | your Git files, or a read-only device service | [service](docs/NETWORK-SERVICE.md) · [walkthrough](docs/walkthroughs/NETWORK-LEG-WALKTHROUGH.md) · [example](examples/network-provisioning-change-report.md) |
+| **Kubernetes** | "let a new client reach this service" | your manifests in Git, and a read-only cluster service | [service](docs/KUBERNETES-SERVICE.md) · [walkthrough](docs/walkthroughs/K8S-LEG-WALKTHROUGH.md) · [example](examples/kubernetes-gitops-change-report.md) |
+| **Terraform** | "add versioning and a public-access block to this bucket" | the `.tf` files you declare; state only if you declare it | [service](docs/TERRAFORM-SERVICE.md) · [walkthrough](docs/walkthroughs/TERRAFORM-LEG-WALKTHROUGH.md) · [example](examples/terraform-iac-change-report.md) |
+| **Observability** | "restrict which senders may export telemetry" | your config files in Git, and a read-only stack service | [service](docs/OBSERVABILITY-SERVICE.md) · [walkthrough](docs/walkthroughs/OBSERVABILITY-LEG-WALKTHROUGH.md) · [example](examples/observability-config-change-report.md) |
 
-## The proof is we publish the rounds we failed
+In every domain the result is a change package, never an applied change. Ready-made programs to run or copy are in
+[`paichart/paichart-configs`](https://github.com/paichart/paichart-configs); to write your own, see
+[writing a spec](docs/WRITING-A-SPEC.md).
 
-Most of this category asks you to trust a demo. We provide **33 verification documents**, each stating its expected observables before the run, then recording what actually happened.
+## Reaching your systems: the MCP hub
 
-See also the ones that went wrong. **VT-12**: a program self-certified `programReleasable: true` while shipping an authorization widening. Five tiers passed it, so minimality is now checked in code rather than in prose.
+- **Read-only, through services you run.** pAIchart stores no device, cluster or cloud credentials.
+- **Every call runs as you.** Each person has their own account and key; there is no shared platform account.
+- **An open registry.** Register any MCP service, find services by what they do, and chain them into workflows.
+- **Any capable AI client can drive it:** Claude Code, Claude Desktop, ChatGPT, or the web app.
 
-- Two byte-identical review runs scored 45 and 92 on the same input. So confidence was demoted to a recorded fact at every tier, and the release gate decides on verifiable facts alone — there is no confidence number in it.
-- A check that couldn't run is a block, not a pass. "We couldn't verify it" never rounds up to "it's fine."
-- Three *correct* change packages were refused because a reviewer judged something it structurally could not see — one wrote "I cannot independently re-verify this comparison" and asserted the conclusion anyway. Better prose closed one lane and the class reappeared in the next, so the comparison is now computed where the evidence lives and handed to the reviewer — who still keeps every judgement the fact does not make (VT-21).
+More: [connecting your services](docs/CONNECTING-YOUR-SERVICES.md) · [security](docs/SECURITY.md) ·
+[service descriptors](descriptors/SPEC.md)
 
-→ **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](scripts/seed-protocol-prompts.ts)** · the agent-facing contracts those runs are held against are in the platform seed, exactly as the agents receive them
+## Documentation and links
 
-## Five domains, one harness
+- **All documentation, by what you are doing:** [docs/README.md](docs/README.md)
+- **After installing:** [operating](docs/OPERATING.md) · [reading a run](docs/READING-A-RUN.md) ·
+  [troubleshooting a run](docs/TROUBLESHOOTING-A-RUN.md)
+- **How it is built:** [how it works](docs/HOW-IT-WORKS.md) · [running it](docs/RUNNING.md) ·
+  [the agents' instructions](scripts/seed-protocol-prompts.ts), exactly as the agents receive them
+- **Case studies:** [checked by machine](case-studies/coordinated-infra-change.md) ·
+  [you approve, you don't author](case-studies/you-approve-you-dont-author.md) ·
+  [inside a multi-domain program](case-studies/inside-a-multi-domain-program.md)
+- **For researchers:** [open questions](verification/OPEN-QUESTIONS.md) ·
+  [`@paichart/containment-checks`](packages/containment-checks/), the arithmetic checks as an MIT library
+- **Hosted demo:** [paichart.app](https://paichart.app) · **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) ·
+  **Security:** [SECURITY.md](SECURITY.md)
 
-- Network Provisioning : *"add a Loopback0 per switch and advertise it into BGP"* → an approved change package the provisioning team applies idempotently: self-provision a read-only device service from a descriptor, harvest real running state, design, author per-device config + validation + rollback, independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
-- Kubernetes / GitOps: *"add an HPA and resource requests/limits to the orders-api Deployment"* → a declarative kustomize overlay from live cluster state, validated offline (`kubeconform` / `kustomize build` / OPA and we never `kubectl diff`). Read-only, RBAC-scoped; secret *names* surface, values never leave the cluster. → [example](examples/kubernetes-gitops-change-report.md) (includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify) · [second example](examples/kubernetes-gitops-pdb-change-report.md) (a PodDisruptionBudget in three runs — the first package's own gap list became the objective, the reviewer refused the first attempt on availability arithmetic, and the revision was approved for choosing a *different* field)
-- Observability Config: *"restrict which senders may export telemetry to the collector"* → exact edits to the configuration files you declare, for a live Prometheus / Grafana / OpenTelemetry stack. A `## Config sources` block in your requirements names each file: the Git copy is kept as the base the edits apply to, and the deployed copy, if you declare it, is read as evidence through a read-only service you run. The platform's own code compares the two and shows the result to the designer and the reviewer. The package carries a deterministic pre-apply validation, a post-apply check and a rollback. pAIchart never applies a change and never reloads a component. → [example](examples/observability-config-change-report.md) (an earlier, whole-file package: the first published package that was also **applied**, with what the running system displayed afterwards — and the first where the reviewer read a platform-stamped **rollback-provenance fact** instead of guessing whether a quote was a quote)
-- Terraform / Cloud IaC: "add versioning and a public-access-block to the acme-app-logs bucket" → an HCL change package as a PR, from the `.tf` files you declare (your state, if you declare it, is read as evidence through a scoped `state pull`: no providers launched, no state lock), with `validate` / `plan` / `tflint` / OPA expected-facts, a rollback, and a Plan witness that says exactly what your CI plan should show. pAIchart computes no drift and runs no plan; it works beside Atlantis or your own pipeline. → [example](examples/terraform-iac-change-report.md) (shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)
-- Artifact Synthesis: source material (git history, execution logs, a POV's delivery history, external MCP services) → a publishable deliverable via harvest → author → review. → [example](examples/artifact-synthesis-case-study.md)
+## Licence and credits
 
-## Reaching your live systems safely — the MCP hub
+Source-available under the **Elastic License 2.0**: use it, modify it, self-host it, including commercially inside your own
+organisation, and redistribute it. The one thing you may not do is offer it to third parties as a hosted or managed service.
+The hosted service at paichart.app runs this same code.
 
-The harvest step is a Hub call, and the same machinery is open to anyone: register a service, discover it by capability, orchestrate it — with per-user identity and no shared API keys.
+The network lab's device service uses [Nornir](https://github.com/nornir-automation/nornir) and
+[NAPALM](https://github.com/napalm-automation/napalm). Until 2026-11-26 it was built on `nornir-mcp-server` by Syed Asif (MIT
+licence); that project is no longer published, and the service is now pAIchart's own.
 
-- Per-user authentication: every external call runs as *you*, via OAuth (GitHub / Microsoft). No shared platform account.
-- Tokens your services can verify themselves: the Hub mints a short-lived token per call and publishes its **public key at a JWKS endpoint**. A service that supports JWKS validates the signature itself, so pAIchart-issued identity replaces static API keys in URLs and **no secret is ever shared between us**. Signing keys rotate on a 90-day cadence. 
-- Scoped to one service each: every minted token carries a per-service audience (RFC 8707), so a token leaked from one service cannot be replayed against another.
-- Trust levels: a 6-tier model controls token forwarding (INTERNAL → TRUSTED → OWNER → TEAM_MEMBER → SCOPED → ANONYMOUS).
-- A fixed tool surface for agents: the execution loop calls six stable tools, permanently — a newly registered service becomes reachable to every agent through service calls, with no new tool schemas, no prompt changes, no redeploy.
-- Open registry: any MCP service registers in one command and defaults to private; discovery is by capability, not name; workflows chain services sequentially, in parallel, or conditionally.
-
-## Administration, observability, access
-
-- Change the DAG definition or any agent's system prompt from the web app. Stored in the database, applied without a restart or redeploy.
-- Full forensics: every run's metadata and artifacts are browsable in the GUI: what each agent saw, what it produced, which checks ran, why a gate held.
-- Multi-user: RBAC and personal API keys.
-- Model selection per agent: choose from the current Claude family in a dropdown.
-
-## Organizing the work — POVs → Phases → Tasks
-
-In most agent frameworks the orchestration graph is code — it exists only while the run exists. In pAIchart, every node of the DAG is a **task**: a durable record with status, dependencies, artifacts, and history, in the same delivery plan your team already works in. Programs and pipelines are just typed tasks, so the graph survives restarts, every agent's work is a browsable work item, and an approval gate is a task transition — the same one a human completing a task goes through, over one common code path.
-
-That's also why there is no separate scheduler to operate, and why forensics come for free: the workflow engine *is* the delivery plan. Ask *"which of my POVs are at risk?"* and get an answer — no UI required.
-
-## Get Started
-
-**Watch first — two videos.** [What pAIchart does](https://www.youtube.com/watch?v=JZ_MSWYvOnc) (6 min: one sentence to a reviewed switch change) · [Install it and run your first change package](https://www.youtube.com/watch?v=ytUNK9_xPwQ) (18 min, following [docs/INSTALL.md](docs/INSTALL.md) and [docs/FIRST-RUN.md](docs/FIRST-RUN.md)).
-
-**See it first — nothing to install.** Sign in at [paichart.app](https://paichart.app), in the web app or from your AI client:
-
-- Hub: `https://paichart.app/mcp`
-- Connect with: Claude Desktop (GitHub sign-in) or ChatGPT (Microsoft sign-in) — or use the web app
-- Privacy: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
-
-A first sign-in is a **demo account**: you can browse the demo projects and use any public MCP service. Until the account is promoted to a standard user, you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, to browse six finished program runs —
-each one a use case from the public [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs) repository.
-Open a run to see how a program is built: every task with its title, its description and the agent assigned to it, the gates
-a person released, and the result. Start with **Fabric Telemetry Expansion**. In an AI client, try
-*"list my POVs and show me the details"* (a POV is a project) or `list_prompts()` for every guided workflow.
-
-**Run your own — install pAIchart from this repository** (next section). Your own instance runs programs you define. A program
-takes two files at any location your install can fetch (a GitHub repository works):
-
-| File | What it is |
-|---|---|
-| `requirements.md` | your high-level design — the objective and its constraints, in prose |
-| `topology.json` | the devices or targets in scope and how they connect |
-
-The use cases in `paichart-configs` are ready-made pairs: run one as it is, then copy its shape for a change of your own.
-[docs/FIRST-RUN.md](docs/FIRST-RUN.md) runs the first one call by call. The in-hub guides are the `HOWTO-use-program-harness`
-and `HOWTO-use-pipeline-harness` prompts. Once you are running:
-
-- *Use the HOWTO-use-pipeline-harness prompt, then ask "Provision a Loopback0 per switch and advertise it into BGP"* — one pipeline, one domain, a reviewed package back
-- *"Which of my POVs are at risk?"* — delivery analytics, answered directly
-- *"Discover services"* — browse the registry by capability
-
-## Run it yourself
-
-**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**. After installing: [your first run](docs/FIRST-RUN.md), [operating](docs/OPERATING.md), [troubleshooting a run](docs/TROUBLESHOOTING-A-RUN.md), [writing a spec](docs/WRITING-A-SPEC.md).
-Every command in order: PostgreSQL 16 and Node 24 installed, the database created, the app cloned, configured,
-seeded and started, the first login, your own account, Claude Code installed and connected to your hub, and the two
-services your first run needs. You need a machine with about 16 GB RAM, an Anthropic API key (about USD 6 of credit for the first run), a Claude account
-that can use Claude Code, and a GitHub account. About an hour.
-
-Already have Node 24 (20.19 is the minimum), PostgreSQL 16 and an empty database? The short form:
-
-```bash
-git clone https://github.com/paichart/paichart && cd paichart && npm ci
-cp .env.example .env               # set DATABASE_URL, APP_BASE_URL and OAUTH_STATE_SECRET (openssl rand -hex 32); then:
-npm run --silent jwt:keys >> .env  # RS256 signing keys (--silent keeps npm's banner out of .env)
-npm run db:seed                    # schema, grants, the built-in admin admin@paichart.local (password printed once), protocols, hub prompts
-npm run dev                        # web app  → http://localhost:3000
-npm run mcp:http:dev               # MCP hub on :8080 (AI clients connect through the web app, http://HOST:3000/mcp)
-```
-
-Sign in as `admin@paichart.local`, create your own account in the Admin Dashboard, then sign in as yourself, open **Profile Settings → AI Provider Settings**, switch **Use System Provider** off, paste your Anthropic API key and press **Save Changes** (top right): the agents run on it, and without it every agent run fails at its first step. Your first run, call by call: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
-
-- [docs/RUNNING.md](docs/RUNNING.md) — what each step does: the two-process shape, roles, `APP_BASE_URL`, production notes
-- [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected
-- [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) — register your own GitHub / Google / Microsoft apps (optional; password login works without)
-- [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)
-
-The platform is source-available under the **Elastic License 2.0**: use it, modify it, self-host it — including
-commercially, inside your own organisation — and redistribute it; the one thing you may not do is offer it to
-third parties as a hosted or managed service. This repository carries the full source (web app + MCP server)
-alongside the protocols and verification pack. The hosted service at paichart.app runs this same code.
-Server-management tooling (monitors, deploy, backups) is intentionally not part of the repository.
-
-## Under the Hood
-
-```
-You (Claude Desktop / ChatGPT / web app)
-  → authenticate to the pAIchart Hub
-  → one PIPELINE task, its title declaring the graph, pointing at your HLD
-      │
-      ├─▶ Program Architect designs the DAG + the interface contract every leg must honour
-      │
-      ├─▶ ⏸  PLAN GATE — a human releases it (AI client or GUI, one common code path)
-      │
-      ├─▶ legs execute: parallel where no edge joins them, sequenced where one does
-      │     each leg:  harvest (read-only, via per-device MCP) → design → author → review
-      │     each edge:  carries a real derived value forward, not an assumption
-      │
-      ├─▶ Tier 1 arithmetic in code · Tier 2 integration review over the composed set
-      │
-      └─▶ release gate — a deterministic AND, no confidence number
-              ↓
-    a reviewed LLD change package, in your AI client and the web GUI
-    your team applies it — idempotently, out of band, with the rollback
-```
-
-Every external call runs as *you*, never as a shared platform account — enforced below the agent, so even a prompt-injected agent cannot exceed the permissions of the user who asked.
-
-## Live Services
-
-The Hub's open registry. Device services are different — they're **self-provisioned per run from a descriptor and torn down after**, so pAIchart never stores your device credentials. The descriptor contract is open: **[spec + JSON Schema + five production-exercised examples](descriptors/SPEC.md)** — author one for your own gear and validate it before a run.
-
-| Service | Capability | Per-User Auth |
-|---------|-----------|---------------|
-| Snowflake | Data warehouse queries | ✅ External OAuth |
-| EIA | U.S. energy data analytics | Service account |
-| Weather | Real-time weather data | Service account |
-| EODHD | Financial market data | Service account |
-| Alpha Vantage | Financial data — 113 tools | Service account |
-| Browser Automation | Web scraping, screenshots, PDFs | Service account |
-| Notifications | Email, Slack, webhooks | Service account |
-| Token Validator | JWT/JWKS integration & trust-level debugging | ✅ Per-user JWT |
-
-Run **`HOWTO-register-service`** (`list_prompts()`) for the walkthrough from basic registration to Grade-A tool schemas, access control, and trust levels.
-
-Register your own in one command:
-
-```
-registry(action: "register", {
-  name: "my-service",
-  description: "What your service does",
-  endpoint: "https://my-service.com/mcp",
-  category: "data-services"
-})
-```
-
-
-
-## Learn
-
-- **[Verification pack](verification/)** — 33 documents, each stating its expected observables before the run. **Including the rounds that failed.**
-- **[The protocols](scripts/seed-protocol-prompts.ts)** — the exact agent-facing contracts the pack holds runs against are in the platform seed script, at their current versions. Earlier versions named in the decision log are in that file's Git history.
-- **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
-- **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
-- **[`@paichart/containment-checks`](packages/containment-checks/)** — the Tier-1 arithmetic, extracted verbatim as an MIT library with its incident-fixture test suite: mechanical checks for LLM-derived infrastructure values (`cidr`, `asn` — extensible by `kind`), where an unimplemented check reports *not mechanically covered*, never a pass.
-
-## Links
-
-- **Hub (connect here)**: [paichart.app/mcp](https://paichart.app/mcp)
-- **JWKS**: `https://paichart.app/api/auth/jwks`
-- **Verification**: [verification/](verification/)
-- **Documentation**: [docs/README.md](docs/README.md) — install, administer, operate, write a spec, contribute. In your AI client: an MCP resource, or `list_prompts()`
-- **Source & self-hosting**: this repository — [docs/RUNNING.md](docs/RUNNING.md)
-
-## Credits
-
-The network lab's device service uses [Nornir](https://github.com/nornir-automation/nornir) and [NAPALM](https://github.com/napalm-automation/napalm). Until 2026-11-26 it was built on `nornir-mcp-server` by Syed Asif (MIT licence); that project is no longer published, and the service is now pAIchart's own.
-
-## Keywords
-
-`mcp` `mcp-hub` `mcp-server` `model-context-protocol` `dag` `directed-acyclic-graph` `multi-agent-orchestration` `low-level-design` `hld-to-lld` `change-synthesis` `intent-driven` `human-gated` `network-automation` `network-provisioning` `napalm` `nornir` `batfish` `kubernetes` `gitops` `terraform` `infrastructure-as-code` `multi-domain-automation` `verification` `deterministic-gate` `autonomous-agents` `change-management` `delivery-management` `pov` `service-discovery` `external-oauth` `jwks` `rfc8707` `per-user-authentication` `workflow-orchestration` `claude-desktop` `chatgpt` `snowflake`
+`mcp` `mcp-hub` `model-context-protocol` `multi-agent-orchestration` `dag` `network-automation` `netdevops` `kubernetes`
+`gitops` `terraform` `infrastructure-as-code` `observability` `change-management` `human-in-the-loop` `low-level-design`
