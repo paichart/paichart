@@ -411,8 +411,9 @@ async function main() {
     ok(/if \(_retry\.reflectionError\) reflectionErrors\.push\(_retry\.reflectionError\);/.test(core), 'core appends the #90 fact');
     const b = core.indexOf('buildExecutionResultJson({');
     ok(/\.\.\.\(reflectionErrors\.length \? \{ reflectionErrors \} : \{\}\)/.test(core.slice(b, core.indexOf('});', b))), 'core passes the list to the result.json builder only when non-empty');
-    // 2 → 3 (2026-10-09, 2b): the requirements form correction is a third reflection call and carries the tool set too.
-    ok((core.match(/mcpFunctions, executionId, userId/g) ?? []).length === 3, 'core passes mcpFunctions to ALL THREE reflection turns — form correction, requirements form correction, #90 (C1)');
+    // 3 → 2 (2026-11-28, parcel A): the requirements form correction was removed with the retired Author. (The held-edit turn
+    // passes the tool set through editStepInput, in another form, so it is not counted here.)
+    ok((core.match(/mcpFunctions, executionId, userId/g) ?? []).length === 2, 'core passes mcpFunctions to BOTH reflection turns — form correction, #90 (C1)');
   }
 
   console.log(`\n${'─'.repeat(50)}\n  Passed: ${passed}  Failed: ${failed}`);

@@ -56,8 +56,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
-import { redactArtifactsForPersist, redactExtraArtifactForPersist, redactSecretsDeep } from '@/lib/agents/harness/redact-artifact-secrets';
-import { REQUIREMENTS_PRE_CORRECTION_ARTIFACT, REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT } from '@/lib/agents/harness/requirements-artifact-names';
+import { redactArtifactsForPersist, redactSecretsDeep } from '@/lib/agents/harness/redact-artifact-secrets';
 import { getReportMdDecision } from './agentArtifactPolicy';
 import { selectAuthoritativeExecution } from './execution-selection';
 import { buildTokenUsageColumns, rollUpAndDeleteExecutions, sanitizeLLMForMarkdown, orderResultJsonForPersist } from './execution-artifacts';
@@ -198,13 +197,6 @@ export interface TerminalSuccessInput {
   finalText: string;
   /** Caller-built via buildExecutionResultJson (supersession audit already mirrored in). */
   resultJson: Record<string, unknown>;
-  /** G1 B (2026-10-10): the requirements Author's ORIGINAL draft when an in-run correction was ATTEMPTED — persisted as
-   *  its own artifact (REQUIREMENTS_PRE_CORRECTION_ARTIFACT), R10-redacted, never inside the JSON artifact, never the
-   *  report. Absent for every other execution, whose artifact set is unchanged. */
-  preCorrectionDraft?: string | null;
-  /** Phase 4 group 1 (1b): a NOT-adopted correction's text — persisted as REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT,
-   *  same handling as the pre-correction draft. */
-  correctionNotAdoptedText?: string | null;
   /** Adapter-shaped execution.logs to persist (engine: canned 5-line; stream: rich narrative). */
   logs: string[];
   /** The single terminal timestamp (M11) — endTime, exec updatedAt, task updatedAt. */
@@ -763,36 +755,15 @@ export async function runTerminalSuccessTx(
       content: truncate(persistRedaction.reportMd ?? reportMdContent),
     });
   }
-  // G1 B: the pre-correction draft, on attempts only (non-PIPELINE — the requirements Author). Redacted by the same
-  // R10 control as report.md; its count joins the one securityEvent line below.
-  let preCorrectionRedacted = 0;
-  if (typeof input.preCorrectionDraft === 'string' && input.preCorrectionDraft.length > 0 && task.type !== 'PIPELINE') {
-    const r = redactExtraArtifactForPersist(input.preCorrectionDraft);
-    preCorrectionRedacted = r.redactedCount;
-    artifactData.push({
-      executionId,
-      name: REQUIREMENTS_PRE_CORRECTION_ARTIFACT,
-      type: 'text/markdown',
-      content: truncate(r.text),
-    });
-  }
-  // 1b (2026-10-12): the not-adopted correction's text, same route and guard.
-  if (typeof input.correctionNotAdoptedText === 'string' && input.correctionNotAdoptedText.length > 0 && task.type !== 'PIPELINE') {
-    const r = redactExtraArtifactForPersist(input.correctionNotAdoptedText);
-    preCorrectionRedacted += r.redactedCount;
-    artifactData.push({
-      executionId,
-      name: REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT,
-      type: 'text/markdown',
-      content: truncate(r.text),
-    });
-  }
-  preCorrectionRedacted += manifestRedacted;
-  if (persistRedaction.redactedCount + preCorrectionRedacted > 0) {
+  // The held manifests' redaction count joins the one securityEvent line below (parcel A 2026-11-28: the two requirements
+  // correction artifacts that also fed this accumulator were removed with the retired Author; the accumulator stays).
+  let extraRedacted = 0;
+  extraRedacted += manifestRedacted;
+  if (persistRedaction.redactedCount + extraRedacted > 0) {
     // Protocol-10 FACT (not a verdict): N matched token(s) redacted before persist.
     logger.warn(
       // R10 v8: the echo share and the echo literal overflow (counts only — never a value; sec-ops R10v8 B-1).
-      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount + preCorrectionRedacted,
+      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount + extraRedacted,
         echoRedactedCount: persistRedaction.echoRedactedCount, echoOverflow: persistRedaction.echoOverflow, securityEvent: true },
       'R10 backstop: redacted matched token(s) from persisted artifact(s) before write'
     );

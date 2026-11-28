@@ -4,8 +4,8 @@
  * A node may change what its agents were GIVEN, not only what text they read: `NodeSpec.inputEdits` names an EditSpec
  * (the same exactly-once replace op as candidates and plants) whose `appliesTo` lists any of
  *
- *   leg:description             the owning harness row's description — the OBJECTIVE OF RECORD the in-run requirements
- *                               check reads (`requirementsInputsFromHarnessRow`) and the scorer reads;
+ *   leg:description             the owning harness row's description — the OBJECTIVE OF RECORD (the retired in-run
+ *                               requirements check and its scorer read it until 2026-11-28);
  *   author-task:description     the Author child task's description — the brief the Author's §1 renders;
  *   reviewer-task:description   the Reviewer child task's description — the brief (with its reading copy of the
  *                               objective's items) the Reviewer's §1 renders.

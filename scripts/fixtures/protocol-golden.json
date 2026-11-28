@@ -173,14 +173,6 @@
     "derivation_reviewer": {
       "sha256": "4cf10c8cff33dc6bcfcd6bcf1ba17f04f86c63b7544a961cab8a362f5b7e1463",
       "chars": 5801
-    },
-    "requirements_author": {
-      "sha256": "ecaa0cd76904c7e8b0f6018b9be0713f2ef3e4f8483055c314ced50d40c131ea",
-      "chars": 40626
-    },
-    "requirements_reviewer": {
-      "sha256": "d860965bdeb255896bfa62d5585f385e4484c155d6a94b393460e932f77f9643",
-      "chars": 22370
     }
   },
   "shared": {

@@ -51,7 +51,8 @@ async function main() {
     for (const m of readFileSync(join(ROOT, 'scripts', f), 'utf8').matchAll(/defaultRole: '([a-z_]+)'/g)) seeded.add(m[1]);
   }
   const roles = new Set<string>([...Object.keys(ROLE_GUIDANCE_LIBRARY), ...seeded]);
-  ok(roles.size >= 30 && roles.has('program_architect') && roles.has('requirements_author'), `role enumeration is real (${roles.size} roles)`);
+  // Floor 30 → 26 (2026-11-28): the two requirements roles left the library and the seeds with the retired Author (28 at the change).
+  ok(roles.size >= 26 && roles.has('program_architect') && roles.has('config_change_author'), `role enumeration is real (${roles.size} roles)`);
   const wrong: string[] = [];
   for (const r of roles) {
     const b = readBudgetFor(r);

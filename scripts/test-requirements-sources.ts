@@ -24,7 +24,7 @@ import { renderSourcesCli } from './check-requirements-sources';
 import { configFixTable, deviceFixTable, supportedLabelShapes } from './requirements-sources-fix-text';
 import { CONFIG_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { canonicalProtocolName } from '../lib/agents/harness/program-protocol';
-import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/requirements-clauses';
+import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/spec-check-shared';
 
 const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string }> };
 
@@ -111,23 +111,7 @@ test('P5 hand-written mode (no Design decisions): the lane is inferred from "cha
   assert(r.notChecked[0].startsWith('S3'), 'S3 must be printed as not checked without --objective');
 });
 
-test('P6 the SKELETON\'s own Device sources slot, filled as its placeholders say, passes S1-S4 (template ↔ check, requirements-authoring >= 1.11.0)', () => {
-  const tmpl = fs.readFileSync(path.join(__dirname, 'fixtures', 'requirements-skeleton-1.11.0.tmpl'), 'utf8');
-  const i = tmpl.indexOf('### Device sources — a network leg only');
-  if (i < 0) { skip('P6', 'the skeleton carries no Device sources slot (requirements-authoring < 1.11.0)'); return; }
-  const j = tmpl.indexOf('\n## ', i);
-  const slot = tmpl.slice(i, j);
-  const fill = (lane: 'change' | 'value', lines: string[]) => slot
-    .replace('{{LEG_TOKEN}}', 'network-provisioning').replace('{{N}}', lane === 'value' ? '1' : '2')
-    .replace(/\{\{LANE SENTENCE[^}]*\}\}/, LANE_SENTENCES[lane])
-    .replace(/\{\{THE OWNER'S BLOCK[^}]*\}\}/, [HEADING, ...lines].join('\n'));
-  const p1 = fill('value', VALUE_LINES); const p2 = fill('change', CHANGE_LINES);
-  assert(!p1.includes('{{') && !p2.includes('{{'), 'a placeholder of the slot was not filled - the slot shape changed');
-  const draft = SPEC_HEAD + '## Pipeline 1 objective — Network (fabric)\n\n- Harvest.\n\n' + p1 + '\n## Pipeline 2 objective — Network (core)\n\n- Change.\n\n' + p2 + '\n## Acceptance\n';
-  const r = checkSources(draft, objective(item(1, VALUE_LINES), item(2, CHANGE_LINES)));
-  assert(r.errors.length === 0, show(r));
-  assert(r.blocks.map((b) => `${b.lane}/${b.laneSource}`).join(',') === 'value/sentence,change/sentence', JSON.stringify(r.blocks));
-});
+// P6 (the retired Author's skeleton slot passes the check) was REMOVED 2026-11-28 with the skeleton (parcel A).
 
 // ── negatives: each must fail CLOSED with its rule ─────────────────────────────────────────────────────────────────────
 test('N1 S2: an ASCII hyphen in place of the separator does not parse (the parser\'s problem is named)', () => {
@@ -612,14 +596,8 @@ else test('C3 the telemetry-export-held-r2 spec: one kubernetes-gitops config-so
   const r = checkSources(fs.readFileSync(LIVE_R2, 'utf8'));
   assert(r.errors.length === 0 && cfg(r).length === 1 && r.blocks.length === 1, show(r) + JSON.stringify(r.blocks));
 });
-const PY = fs.readFileSync(path.join(__dirname, 'publish-generated-spec.py'), 'utf8');
-test('PIN2 the Python publish pass calls the check and parses no block itself', () => {
-  assert(PY.includes("'check-requirements-sources.ts'"), 'publish-generated-spec.py no longer calls the sources check');
-  assert(!PY.includes(SOURCE_SEPARATOR.trim() + ' service') && !DEVICE_SOURCE_KINDS.some((k) => PY.includes(`'${k}'`)), 'publish-generated-spec.py parses sources itself');
-});
-test('PIN6 the Python publish pass hands the owner\'s answers to the sources check (owner items keyed on their token, §3b item 6)', () => {
-  assert(/'check-requirements-sources\.ts'\),[^\n]*'--answers', a\.answers/.test(PY), 'publish-generated-spec.py calls the sources check without --answers: config-sources owner items would not be keyed on their token');
-});
+// PIN2 / PIN6 (the Python publish pass calls this check) REMOVED 2026-11-28 with publish-generated-spec.py (parcel A: the
+// retired Author's publish pass). The check is called directly now: docs/WRITING-A-SPEC.md and the spec-writer agent.
 // The skill's operative files are not exported (owner 2026-11-13). In the PRIVATE repo (it has cline_docs/) SKILL.md must exist
 // and this pin runs; in the public tree it is absent by design and the pin is skipped out loud — never skipped silently in private.
 const SKILL_PATH = path.join(ROOT, '.claude/skills/requirements-spec/SKILL.md');

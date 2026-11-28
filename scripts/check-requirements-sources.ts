@@ -7,7 +7,7 @@
  * declare the same thing) is answered by lib/agents/harness/device-sources.ts, the module the platform itself reads a leg's
  * declaration with. This file only finds WHERE the blocks are (fences, sections, owner items) and applies the four rules.
  * It holds no kind name and no separator character of its own; `test:requirements-sources` pins that (LL-CS-22).
- * The Python publish pass (scripts/publish-generated-spec.py prepare) calls this CLI and never parses a block itself.
+ * Run directly (docs/WRITING-A-SPEC.md, the spec-writer agent). Until 2026-11-28 the retired Author's Python publish pass called this CLI.
  * This is the one requirements check whose canonical semantics is TypeScript, because the shipping parser is.
  *
  * Rules (all ERRORs; any ERROR stops the publish, and no waiver clears one, because each is a stop the platform would hit at
@@ -50,7 +50,7 @@
  *
  * OWNER ITEMS ARE KEYED ON THEIR TOKEN (2026-11-17, STEPS-2-4-PLAN section 3b item 6; record STEP4-REQ-CHECK-TOKEN-KEYING.md). An owner
  * item's config-sources block is resolved under ONE protocol: the config-sources token that prefixes the item's rows in the owner's
- * ROW-ITEM-MAP (answers.md, `--answers`; the rule check-requirements-clauses.py already uses: "an item governs the legs whose token
+ * ROW-ITEM-MAP (answers.md, `--answers`; the rule the retired check-requirements-clauses.py used: "an item governs the legs whose token
  * prefixes its rows"). It is never resolved by trying every key: terraform-iac and kubernetes-gitops share their kinds, so the text
  * alone cannot tell them apart. An item whose rows name no config-sources token, or several, is an S3 ERROR (fail closed). Without
  * the map, the candidates are every config-sources protocol the check reads: exactly one (today) resolves as before; several is the
@@ -74,8 +74,7 @@ import {
 import { resolveConfigLabels } from '../lib/agents/harness/held-bytes/config-label';
 import { configFix, deviceFix } from './requirements-sources-fix-text';
 import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
-import { LEG_TOKENS } from '../lib/agents/harness/requirements-coverage';
-import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/requirements-clauses';
+import { LEG_TOKENS, rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/spec-check-shared';
 
 export type Lane = 'change' | 'value';
 /** The two fixed lane sentences a generated spec carries beside each block (plan section 4.3). */
@@ -121,7 +120,7 @@ export const SHIPPED_CONFIG_KEYS: readonly string[] = Object.freeze(CONFIG_SOURC
 const knownLegTokens = (keys: readonly string[]) => [...new Set([...LEG_TOKENS, ...Object.values(DEVICE_SOURCE_LANES).map((v) => v.contractKey), ...keys])];
 /** The config heading is protocol-independent in the parser (the protocol only decides the kinds), so any table row asks it. */
 const isConfigHeading = (l: string) => parseConfigSourcesBlock(l.trim(), SHIPPED_CONFIG_KEYS[0]).state !== 'absent';
-/** The config-sources tokens an owner item's rows name (first segment of each row id, as check-requirements-clauses.py reads it). */
+/** The config-sources tokens an owner item's rows name (first segment of each row id, as the retired check-requirements-clauses.py read it). */
 const itemConfigTokens = (rows: ReadonlySet<string> | undefined, keys: readonly string[]) =>
   [...new Set([...(rows ?? [])].map((r) => r.split('.')[0]))].filter((t) => keys.includes(t)).sort();
 const isSourcesHeading = (l: string) => isDeviceHeading(l) || isConfigHeading(l);

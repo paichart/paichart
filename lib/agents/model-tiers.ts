@@ -66,12 +66,8 @@
  *                  Opus 5.5 at effort MEDIUM was rejected (worse than Sonnet on the same case). The other infra
  *                  roles (harvester, architect, reviewer) stay on `infra`. Record: register MODEL-CHOICE;
  *                  the Opus 5.5 tool-loop audit (register OPUS55) gates the production reseed.
- *   requirementsAuthor — the `requirements_author` role ONLY (requirements-authoring). Sonnet 5 → Opus 5.5 by a GUI
- *                  edit 2026-10-08 22:01:09Z (owner, n=1, NOT lab-gated); made permanent here by owner decision G8
- *                  (2026-10-10, cline_docs/reviews/in-run-correction-post-review-2026-10-10/SYNTHESIS.md) so a reseed
- *                  no longer reverts it silently. A SEPARATE tier from infraAuthor on purpose: different role, different
- *                  evidence (VT-33: a three-run test passed on it; 5 of 6 Opus drafts overran the read limit vs 0 of 4
- *                  Sonnet). No effort is set — the engine default (high) applies, as on the GUI-edited row.
+ *   (requirementsAuthor — the retired `requirements_author` role's tier, Opus 5.5 — REMOVED 2026-11-28 with the retired
+ *                  requirements Author, parcel A; its seed was deleted and its three production rows are DEPRECATED.)
  */
 export const AGENT_MODELS = {
   orchestrator: 'claude-sonnet-5',
@@ -79,7 +75,6 @@ export const AGENT_MODELS = {
   infra: 'claude-sonnet-5',
   generic: 'claude-haiku-4-5',
   infraAuthor: 'claude-opus-5-5',
-  requirementsAuthor: 'claude-opus-5-5',
 } as const;
 
 export type AgentTier = keyof typeof AGENT_MODELS;

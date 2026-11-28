@@ -397,10 +397,6 @@ export interface ExecutionResultJsonInput {
    *  Emitted ONLY when supplied: every non-eligible role and the completion-anchored rescue stay
    *  byte-identical (plan §7a). Built by `computeFormCheckFact` (lib/agents/harness/package-form-check.ts). */
   formCheck?: object | null;
-  /** Requirements form check (2b, 2026-10-09): the `requirements_author` publish-check fact + its correction record
-   *  (`runRequirementsFormStep`, lib/agents/harness/requirements-form-correction.ts). NESTED under toolLoop (E3b) for the
-   *  same reason as `formCheck`; emitted ONLY when supplied, so every other role stays byte-identical. */
-  requirementsFormCheck?: object | null;
   /** Reflection calls (#89 correction, budget fail-fast, form correction, #90) that ERRORED — `{site, status,
    *  errorType, errorCode}` per call (`reflectionErrorFact`, agentic-tool-loop.ts). Opus 5.5 loop audit, 2026-10-07:
    *  those passes fall back silently by design, and preserved thinking 400s an edited history only on customer orgs
@@ -513,7 +509,6 @@ function truncateToolCallResults(
  *             truncationRetryMaxTokens, truncationRetryStopReason,
  *             truncationRetryDiscardedChars, finalStopReason,
  *             deliverableTruncated, toolErrorResultCount, (config_change_author only) formCheck,
- *             (requirements_author only) requirementsFormCheck,
  *             (only when a reflection call errored) reflectionErrors}
  *   Stream extensions (Vercel-AI-SDK only): functionCall, webSearchResults,
  *             citations, searchQueries
@@ -624,17 +619,18 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * survive. Pinned by E3d in the parity suite and by RW1/RW2 in `test-lean-card-facts.ts` — the
  * read-side tripwire that would have caught the first defect the day it shipped.
  */
+/** `'requirements-form-correction'` is a STORED-ONLY value (2026-11-28, parcel A): past `requirements_author` rows carry it in
+ *  `toolLoop.reflectionPassSpentBy`; the writer was removed with the retired Author, so it is never produced again. */
 export type ReflectionPassSpender = '#89' | 'form-correction' | 'requirements-form-correction' | 'edit-correction' | '#90';
-/** G6: the one reflection pass's spender, by the shipped precedence. An ATTEMPTED form or requirements correction
+/** G6: the one reflection pass's spender, by the shipped precedence. An ATTEMPTED form or held-edit correction
  *  spends it even when the call failed (llm-error) — the pattern doc names that trade. */
 export function reflectionPassSpentBy(i: {
-  correctionTurnUsed?: boolean; diagnosticRetryUsed?: boolean; formCheck?: object | null; requirementsFormCheck?: object | null;
+  correctionTurnUsed?: boolean; diagnosticRetryUsed?: boolean; formCheck?: object | null;
   editCorrection?: { attempted?: boolean } | null;
 }): ReflectionPassSpender | null {
   const attempted = (f: object | null | undefined) => (f as { correction?: { attempted?: boolean } } | null | undefined)?.correction?.attempted === true;
   if (i.correctionTurnUsed) return '#89';
   if (attempted(i.formCheck)) return 'form-correction';
-  if (attempted(i.requirementsFormCheck)) return 'requirements-form-correction';
   if (i.editCorrection?.attempted === true) return 'edit-correction';
   if (i.diagnosticRetryUsed) return '#90';
   return null;
@@ -736,7 +732,6 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     truncationRetryStopReason = null, truncationRetryDiscardedChars = null,
     finalStopReason = null,
     formCheck = null,
-    requirementsFormCheck = null,
     reflectionErrors = null,
     extensions = {},
     logger, executionId,
@@ -863,15 +858,13 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
       // Package form check (2026-10-07): LAST in toolLoop and only when supplied, so an absent input leaves
       // every existing byte (and key order) of this object unchanged.
       ...(formCheck ? { formCheck } : {}),
-      // Requirements form check (2b, 2026-10-09): requirements_author only; absent ⇒ no byte changes.
-      ...(requirementsFormCheck ? { requirementsFormCheck } : {}),
       // Errored reflection calls (2026-10-07): only when non-empty, after formCheck, so absence changes no byte.
       ...(reflectionErrors && reflectionErrors.length ? { reflectionErrors } : {}),
       // G6 (2026-10-10, AR M3): WHO spent the run's ONE reflection pass, derived from the facts above in the
-      // documented precedence (#89 > form correction > requirements correction > held-edit correction > #90). A transcription, not a new
+      // documented precedence (#89 > form correction > held-edit correction > #90). A transcription, not a new
       // decision; emitted only when a pass was spent, so a clean execution's bytes and key order are unchanged.
       ...(() => {
-        const by = reflectionPassSpentBy({ correctionTurnUsed, diagnosticRetryUsed, formCheck, requirementsFormCheck, editCorrection });
+        const by = reflectionPassSpentBy({ correctionTurnUsed, diagnosticRetryUsed, formCheck, editCorrection });
         return by ? { reflectionPassSpentBy: by } : {};
       })(),
     },

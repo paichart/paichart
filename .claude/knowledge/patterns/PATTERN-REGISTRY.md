@@ -485,7 +485,7 @@
 **When to use**: An agent's deliverable fails a MECHANICALLY checkable rule (size, form, a missing line, a citation) that is otherwise only found after the run, forcing a full regeneration (an open loop)
 **Results**: requirements_author — pre-registered test passed at run 2 of 3 (VT-33, n=1); the turn was necessary there on SIZE only. The earlier 9-generation trial is not a control, because six things changed at once. terraform config_change_author live since 2026-10-06: 9/9 adopted, 0 collateral changes, fixes latent truncation (not refusals)
 **Key features**: pure check → fact stamped always (shadow first) → ONE tool-less facts-only correction turn behind a default-OFF flag → re-check → adoption rule (no measure worsens + one improves, or per-line provenance) → time budget, kill criteria, series cut
-**Production use**: `lib/agents/harness/{package-form-check,form-correction}.ts` (terraform) · `lib/agents/harness/{requirements-form-check,requirements-form-correction}.ts` (requirements) · wired in `lib/services/execution-core.ts`
+**Production use**: `lib/agents/harness/{package-form-check,form-correction}.ts` (terraform) · `lib/agents/harness/{requirements-form-check,requirements-form-correction}.ts` (removed 2026-11-28 with the retired Author) (requirements) · wired in `lib/services/execution-core.ts`
 **Companion patterns**: agent-output-trustworthiness-defense-stack (ancestor: anti-fabrication correction turn); Protocol 16 lab gate; Protocol 10 (the message carries facts, never verdicts)
 **Anti-patterns**: judging/instructing in the message; looping until clean; triggering on what the agent does not own; adopting on the agent's claim; gating release on the turn; shipping without shadow data; a pre-filter as a trigger; correcting toward a defective checker/spec. Applies to FORM slips only, never judgement. Deletion-repairable triggers need provenance or a content-preservation measure (condition 4)
 
@@ -517,7 +517,7 @@
 **When to use**: An agent produces a design artifact whose choices belong to an owner, and those choices recur across objectives (so a fixed, earned question list can exist)
 **Results**: telemetry-export — ~40 owner rows → ~12 grouped decisions, one human pass instead of 20+ hand revisions; log-archive read — 20 questions → APPROVED 92 → published → program `programReleasable: true`
 **Key features**: question registry with earned-by provenance + CI parity → zero-decision run → coverage BEFORE answers → grouped owner answers with evidence → numbered items + row→item map → mechanical merge → regenerate + citation/coverage/clause gates; owner-only, per-finding waivers
-**Production use**: `.claude/knowledge/pipelines/requirements-authoring/OWNER-ANSWER-SESSION.md` (canonical procedure), `/requirements-spec` skill, `scripts/{check-requirements-coverage,build-answered-objective,build-row-item-map}.py`
+**Production use** (RETIRED 2026-11-28 with the requirements Author; kept as the record): `.claude/knowledge/pipelines/requirements-authoring/OWNER-ANSWER-SESSION.md` (canonical procedure), `/requirements-spec` skill, `scripts/{check-requirements-coverage,build-answered-objective,build-row-item-map}.py`
 **Anti-patterns**: generator defaults an owner decision; flat 40-row lists; answering around a missing question; merging by hand; adding questions on speculation; observed state inside an answer
 
 ### **specialist-knowledge-propagation-pattern.md** - 95% Confidence ✅

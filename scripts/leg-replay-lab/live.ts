@@ -4,8 +4,6 @@
  * Called only under `--spend`. Order mirrors execution-core.ts `runExecutionCore` (AE6-I1 live order):
  *   runAgenticToolLoop → finalizeTextForStopReason → content guard → computeFormCheckFact (config_change_author)
  *   → runFormCorrection (flag on AND the fact decided `attempted`)
- *   → runRequirementsFormStep (requirements_author; the SAME shared step the core calls — fact always, the correction
- *     turn when REQUIREMENTS_FORM_CORRECTION_ENABLED=true in the lab's env and the step decides `attempted`)
  *   → parseConfidenceScore/applyConfidenceCap
  *   → runEditApplicationStep (PLATFORM-HELD-BYTES Stage B, held-variant config_change_author only; its one correction turn
  *     when the arm enables it — HELD_EDIT_CORRECTION_ENABLED semantics, passed per arm, never via the env)
@@ -30,11 +28,7 @@ import { finalizeTextForStopReason } from '../../lib/services/llm/finalize-respo
 import { computeFormCheckFact, isFormCheckEligible } from '../../lib/agents/harness/package-form-check';
 import { runFormCorrection, isFormCorrectionEnabled } from '../../lib/agents/harness/form-correction';
 import { parseConfidenceScore, applyConfidenceCap } from '../../lib/agents/harness/parse-confidence';
-import { isRequirementsFormCheckEligible } from '../../lib/agents/harness/requirements-form-check';
-import { runRequirementsFormStep, isRequirementsFormCorrectionEnabled, requirementsInputsFromHarnessRow } from '../../lib/agents/harness/requirements-form-correction';
-import type { RequirementsFormInputs } from '../../lib/agents/harness/requirements-form-correction';
 import { runDiagnosticRetry, BUDGET_SELF_FLAG_PATTERN } from '../../lib/agents/harness/diagnostic-retry';
-import { RUNTIME_LIMITS } from '../../lib/validation/runtime-limits';
 import { costForExecution } from '../../lib/services/llm/model-pricing';
 import { LLMProvider } from '../../lib/services/llm/types';
 import type { RebuiltPrompt } from './rebuild';
@@ -59,15 +53,8 @@ export interface LiveResult {
    *  `toolCalls` builder. Under the stub every result is the stub. */
   toolCallRecords: Array<Record<string, unknown>>;
   formCheck: Record<string, unknown> | null;
-  /** requirements_author only: the shipping `toolLoop.requirementsFormCheck` stamp. */
-  requirementsFormCheck: Record<string, unknown> | null;
-  /** requirements_author, when the correction turn was ATTEMPTED: the draft before it, the facts-only message the
-   *  Author was sent, and the model's raw re-emission (kept even when NOT adopted — the read needs both sides). */
-  requirementsCorrection?: { preCorrectionText: string; correctionPrompt: string | null; correctedRaw: string | null; enabledSource: string } | null;
   /** PLATFORM-HELD-BYTES Stage B: the shipping edit step's result (null unless the arm runs the held variant). */
   editStep?: EditStepResult | null;
-  /** requirements_author: where the step's `enabled` came from — `arm:on|off` (the variant lever) or `env:on|off`. */
-  requirementsFormCorrectionEnabledSource?: string | null;
   confidenceScore: number | null;
   diagnosticRetryUsed: boolean;
   correctionTurnUsed: boolean;
@@ -125,12 +112,6 @@ export function setLabCallGuard(g: { before: () => void; after: () => void } | n
 export class LabCapReached extends Error {}
 
 export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; taskId: string; taskType: string | null; apiKey: string;
-  /** requirements_author: the harness row the snapshot carries (`snap.leg`) — the objective + owner map, no DB read. */
-  requirementsHarnessRow?: Record<string, any> | null;
-  /** L-R3 (2026-10-09): the ARM's correction flag. When set it is the step's `enabled`, independent of the process env
-   *  (samples of different arms run concurrently in one process, so an env flip per arm would race). Unset ⇒ the env
-   *  (`REQUIREMENTS_FORM_CORRECTION_ENABLED`), as before. */
-  requirementsFormCorrectionEnabled?: boolean;
   /** Recorded tools (2026-10-13): serve calls from the node's production record instead of the stub. One per sample. */
   toolServer?: RecordedToolServer | null;
   /** PLATFORM-HELD-BYTES Stage B: the held-variant edit step's inputs (the arm's binding, the Author's PATCHED inputContext,
@@ -146,17 +127,11 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
   const started = Date.now();
   const calls: LlmCall[] = [];
   let purpose = 'loop';
-  let corrCapture: { correctionPrompt: string | null; correctedRaw: string | null } | null = null;
   const generateText = async (prompt: string, options: any, userId?: string) => {
     labCallGuard?.before(); // L-CS-K (2026-11-16): the run's spend cap is checked BEFORE every model call — a call over the cap is never sent
     let resp: any;
     try { resp = ctx.generateTextOverride ? await ctx.generateTextOverride(prompt, options, userId) : await llm!.generateText(prompt, options, userId); }
     finally { labCallGuard?.after(); }
-    if (purpose === 'requirements-form-correction') {
-      const last = Array.isArray(options?.messages) ? options.messages[options.messages.length - 1] : null;
-      const lastText = Array.isArray(last?.content) ? last.content.map((b: any) => b?.text ?? '').join('') : (typeof last?.content === 'string' ? last.content : null);
-      corrCapture = { correctionPrompt: lastText, correctedRaw: typeof resp?.text === 'string' ? resp.text : null };
-    }
     // TEST ONLY (pinned by test:leg-replay-lab, LK10): a fake model reports zero usage; LAB_TEST_FAKE_OUTPUT_TOKENS gives each FAKE call a
     // known output-token count so the spend meter can be checked under concurrency. Ignored unless the model call is a fake.
     const fakeOut = ctx.generateTextOverride ? Number(process.env.LAB_TEST_FAKE_OUTPUT_TOKENS ?? 0) : 0;
@@ -176,15 +151,11 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     { provider: LLMProvider.ANTHROPIC_SDK, apiKey: ctx.apiKey } as any, p.system);
   const toolCalls: LiveResult['toolCalls'] = [];
   const abort = new AbortController();
-  // The lab's loop bound has been a flat 600 s. For requirements_author the bound is LOAD-BEARING: the 2b step decides
-  // `insufficient-time` from the watchdog's time left, so the lab uses production's own formula
-  // (agentExecutionEngine: EXECUTION_TIMEOUT_BASE_MS + maxToolTurns × EXECUTION_TIMEOUT_PER_TURN_MS — 1080 s at 30 turns).
-  // Other roles keep 600 s so earlier experiments' baselines stay comparable (a known lab/production divergence).
-  const reqEligible = isRequirementsFormCheckEligible(p.role, ctx.taskType);
-  const prodTurns = Math.min(Number.isFinite(p.maxToolTurns) && p.maxToolTurns > 0 ? p.maxToolTurns : RUNTIME_LIMITS.DEFAULT_TOOL_TURNS, RUNTIME_LIMITS.MAX_TOOL_TURNS);
-  if (reqEligible && isBatchScope()) throw new Error('LAB-BATCH-TRANSPORT: a requirements_author node cannot run batched — its 2b time decision reads the wall clock');
+  // The lab's loop bound is a flat 600 s (a known lab/production divergence; earlier experiments' baselines stay comparable).
+  // Until 2026-11-28 a requirements_author used production's own formula (its 2b time decision read the watchdog): that role
+  // and its step were removed with the retired Author (parcel A).
   // LAB-BATCH-TRANSPORT: a batched turn takes minutes, so the deadline is extended (the time-budget decisions read time as ample — named).
-  const timeoutMs = (reqEligible ? RUNTIME_LIMITS.EXECUTION_TIMEOUT_BASE_MS + prodTurns * RUNTIME_LIMITS.EXECUTION_TIMEOUT_PER_TURN_MS : 600_000) + (isBatchScope() ? BATCH_DEADLINE_EXTENSION_MS : 0);
+  const timeoutMs = 600_000 + (isBatchScope() ? BATCH_DEADLINE_EXTENSION_MS : 0);
   const loopStartedAt = Date.now();
   const deadlineAt = loopStartedAt + timeoutMs;
   const timer = setTimeout(() => abort.abort(), timeoutMs);
@@ -261,31 +232,6 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     }
   }
 
-  let requirementsFormCheck: any = null;
-  let requirementsCorrection: LiveResult['requirementsCorrection'] = null;
-  let requirementsFormCorrectionEnabledSource: string | null = null;
-  if (reqEligible) {
-    const inputs: RequirementsFormInputs = requirementsInputsFromHarnessRow(ctx.requirementsHarnessRow);
-    purpose = 'requirements-form-correction';
-    const enabled = typeof ctx.requirementsFormCorrectionEnabled === 'boolean' ? ctx.requirementsFormCorrectionEnabled : isRequirementsFormCorrectionEnabled();
-    const enabledSource = typeof ctx.requirementsFormCorrectionEnabled === 'boolean' ? `arm:${enabled ? 'on' : 'off'}` : `env:${enabled ? 'on' : 'off'}`;
-    const preCorrectionText = finalResponse;
-    const rq = await runRequirementsFormStep({
-      text: finalResponse, stopReason: loop.finalStopReason, inputs, correctionTurnUsed,
-      budgetFlagged: !!budgetFailFastUsed || (!!finalResponse && BUDGET_SELF_FLAG_PATTERN.test(finalResponse.slice(0, 1500))),
-      enabled, deadlineAt, loopStartedAt, currentResponse, messageHistory, totalUsage,
-      prompt: p.user, normalizedLlmConfig: cfg, mcpFunctions: p.tools as any, executionId: ctx.executionId, userId: undefined,
-    }, { generateText, logger: quiet });
-    requirementsFormCheck = rq.stamp;
-    requirementsFormCorrectionEnabledSource = enabledSource;
-    finalResponse = rq.text; currentResponse = rq.currentResponse;
-    if (rq.attempted) {
-      formCorrectionAttempted = true;
-      const cap = corrCapture as { correctionPrompt: string | null; correctedRaw: string | null } | null;
-      requirementsCorrection = { preCorrectionText, correctionPrompt: cap?.correctionPrompt ?? null, correctedRaw: cap?.correctedRaw ?? null, enabledSource };
-    }
-  }
-
   // PLATFORM-HELD-BYTES Stage B (V-5c position): the held-edit step, config_change_author on a VARIANT leg only.
   let editStep: EditStepResult | null = null;
   if (he && isEditStepEligible(p.role ?? null, ctx.taskType, he.owningLeg)) {
@@ -316,7 +262,7 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     editStep,
     finalResponse, finalStopReason: retry.currentResponse?.stopReason ?? loop.finalStopReason, turns: turnCount, toolCalls,
     toolCallRecords: toolCallResults as Array<Record<string, unknown>>,
-    formCheck, requirementsFormCheck, requirementsCorrection, requirementsFormCorrectionEnabledSource, confidenceScore: retry.confidenceScore, diagnosticRetryUsed: retry.diagnosticRetryUsed, correctionTurnUsed,
+    formCheck, confidenceScore: retry.confidenceScore, diagnosticRetryUsed: retry.diagnosticRetryUsed, correctionTurnUsed,
     truncationRetryUsed: loop.truncationRetryUsed, calls, costUsd: calls.reduce((s, c) => s + (c.costUsd ?? 0), 0), durationMs: Date.now() - started,
   };
 }

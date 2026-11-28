@@ -15,7 +15,7 @@ import { R9_VERSION } from '../lib/agents/harness/sanitize-chained-output';
 import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { decideEditCorrection, buildEditCorrectionPrompt, checkEditCorrectionAdoption, runEditCorrectionTurn, EDIT_CORRECTION_INTENT, foldMachineHeadingTitle } from '../lib/agents/harness/held-edit-correction';
+import { decideEditCorrection, estimateCorrectionTime, CORRECTION_TURN_MAX_MS, buildEditCorrectionPrompt, checkEditCorrectionAdoption, runEditCorrectionTurn, EDIT_CORRECTION_INTENT, foldMachineHeadingTitle } from '../lib/agents/harness/held-edit-correction';
 import { computeEditApplication, AUTHOR_CORRECTABLE } from '../lib/agents/harness/held-bytes/apply';
 import { reflectionPassSpentBy, buildExecutionResultJson } from '../lib/services/execution-artifacts';
 import { buildEditApplicationFact, candidateSetDigest8, EDIT_FACT_MAX } from '../lib/agents/harness/held-bytes/edit-fact';
@@ -348,6 +348,29 @@ test('V-5c-2: the decision order — platform state, no correctable refusal, #89
   eq(d({}), 'attempted');
 });
 
+// Carried 2026-11-28 (parcel A) from the deleted test-requirements-form-correction.ts:307-315 and :636-643, numbers unchanged:
+// the time budget moved into held-edit-correction.ts and this correction is now its only user (REVIEW-agent-execution R3).
+test('V-5c-2 time budget: R4 constants — tokens = max(last turn, chars/3), floor tps when unmeasurable, safety added; <10 s loop not sampled', () => {
+  const t = estimateCorrectionTime({ deadlineAt: 1_000_000, now: 400_000, loopStartedAt: 400_000, draftChars: 51_000, lastTurnOutputTokens: 0, totalOutputTokens: 0 });
+  ok(t.observedTps === 90 && t.estimatedOutputTokens === 17_000, JSON.stringify(t));
+  ok(t.estimatedMs === Math.round(30_000 + (17_000 / (90 * 0.85)) * 1000) && t.remainingMs === 600_000, JSON.stringify(t));
+  eq(Object.keys(t), ['remainingMs', 'estimatedMs', 'estimatedOutputTokens', 'observedTps'], 'stored key order (toolLoop.editCorrection.timeBudget): ');
+  const m = estimateCorrectionTime({ deadlineAt: 1_080_000, now: 400_000, loopStartedAt: 0, draftChars: 51_000, lastTurnOutputTokens: 20_000, totalOutputTokens: 40_000 });
+  ok(m.observedTps === 100 && m.estimatedOutputTokens === 20_000, JSON.stringify(m));
+  const short = estimateCorrectionTime({ deadlineAt: 1_080_000, now: 5_000, loopStartedAt: 0, draftChars: 51_000, lastTurnOutputTokens: 500, totalOutputTokens: 500 });
+  ok(short.observedTps === 90, `a <10 s loop is not a throughput sample: ${JSON.stringify(short)}`);
+  eq(CORRECTION_TURN_MAX_MS, 600_000);
+});
+test('V-5c-2 time bound (G5): compared against min(time left, the 600 s turn cap)', () => {
+  const bad = appOf(BAD);
+  const d = (remainingMs: number, estimatedMs: number) => decideEditCorrection({ application: bad, correctionTurnUsed: false, formCorrectionAttempted: false, budgetFlagged: false, enabled: true,
+    time: () => ({ remainingMs, estimatedMs, estimatedOutputTokens: 1, observedTps: 90 }) });
+  const over = d(700_000, 650_000);
+  ok(over.notAttemptedReason === 'insufficient-time' && over.timeBudget?.boundMs === 600_000, JSON.stringify(over));
+  const tight = d(300_000, 310_000);
+  ok(tight.notAttemptedReason === 'insufficient-time' && tight.timeBudget?.boundMs === 300_000, JSON.stringify(tight));
+});
+
 test('V-5c-2: every AUTHOR_CORRECTABLE name has exactly one intent; the prompt never carries line TEXT; A18 names ${env:NAME}', () => {
   eq(Object.keys(EDIT_CORRECTION_INTENT).sort(), [...AUTHOR_CORRECTABLE].sort());
   const secretLine = '        password: Synth3ticLEAK9';
@@ -452,11 +475,10 @@ test('V-5c-2 goldens (§5 item 3): buildEditCorrectionPrompt output for one fixt
   ok(moved.length === 0, `moved: ${moved.join(', ')} (a change after G1 is a §5 event)`);
 });
 
-test('V-5c spender (AE S2): precedence #89 > form > requirements > edit > #90; an attempt spends the pass', () => {
+test('V-5c spender (AE S2): precedence #89 > form > edit > #90; an attempt spends the pass', () => {
   const att = { correction: { attempted: true } };
   eq(reflectionPassSpentBy({ editCorrection: { attempted: true } }), 'edit-correction');
   eq(reflectionPassSpentBy({ editCorrection: { attempted: true }, diagnosticRetryUsed: true }), 'edit-correction');
-  eq(reflectionPassSpentBy({ editCorrection: { attempted: true }, requirementsFormCheck: att }), 'requirements-form-correction');
   eq(reflectionPassSpentBy({ editCorrection: { attempted: true }, formCheck: att }), 'form-correction');
   eq(reflectionPassSpentBy({ editCorrection: { attempted: true }, correctionTurnUsed: true }), '#89');
   eq(reflectionPassSpentBy({ editCorrection: { attempted: false }, diagnosticRetryUsed: true }), '#90');
@@ -623,12 +645,12 @@ test('DB-P2-3: a candidate over the per-file cap (or the package over the execut
 });
 
 // ── V-5 core wiring: SOURCE ORDER pins (execution-core.ts) ──
-test('V-5 core: ONE owning-leg resolution; step after requirements & before onStoringResults; #90 disqualified; recount after #90; editCorrection threaded; variant I/O before the nets', () => {
+test('V-5 core: ONE owning-leg resolution; step after the form correction & before onStoringResults; #90 disqualified; recount after #90; editCorrection threaded; variant I/O before the nets', () => {
   const src = readFileSync(join(__dirname, '..', 'lib', 'services', 'execution-core.ts'), 'utf8');
   const at = (n: string) => { const i = src.indexOf(n); if (i < 0) throw new Error(`missing: ${n}`); return i; };
   eq((src.match(/resolveOwningLegProtocol\(/g) ?? []).length, 1, 'one owning-leg resolution: ');
   // F-T2-1 (b): the REAL step (editStepInput(false)) keeps its position; the decide-only preview before the form correction is pinned separately
-  ok(at('runRequirementsFormStep(') < at('runEditApplicationStep(editStepInput(false)') && at('runEditApplicationStep(editStepInput(false)') < at('observers.onStoringResults?.('), 'step position');
+  ok(at('runFormCorrection({') < at('runEditApplicationStep(editStepInput(false)') && at('runEditApplicationStep(editStepInput(false)') < at('observers.onStoringResults?.('), 'step position');
   ok(at('formCorrectionAttempted = formCorrectionAttempted || editStep.correction.attempted') < at('runDiagnosticRetry({'), '#90 disqualifier set before #90');
   ok(at('runDiagnosticRetry({') < at('recountEditApplication(editStep'), 'recount after #90');
   ok(at('editCorrection: editStep.correction') < at('const truncationStalled'), 'editCorrection threaded into buildExecutionResultJson');
@@ -691,6 +713,10 @@ test('V-5h (BC-P2-2): agent.results hides both held manifests at the select (the
   ok(/notIn: \[\.\.\.REQUIREMENTS_OPERATOR_ARTIFACTS, \.\.\.HELD_OPERATOR_ARTIFACTS\]/.test(r), 'the select excludes the held set');
   ok(/HELD_OPERATOR_ARTIFACTS: readonly string\[\] = \[EDIT_APPLICATION_MANIFEST_NAME, HELD_BYTES_MANIFEST_NAME\]/.test(r), 'the held set names both manifests');
   eq([EDIT_APPLICATION_MANIFEST_NAME, HELD_BYTES_MANIFEST_NAME], ['edit-application.manifest.json', 'held-bytes.manifest.json']);
+  // Carried 2026-11-28 (parcel A) from the deleted test-requirements-form-correction.ts:420: stored requirements runs still hold
+  // these two artifacts, and the select must keep excluding them.
+  const namesSrc = readFileSync(join(__dirname, '..', 'lib', 'agents', 'harness', 'requirements-artifact-names.ts'), 'utf8');
+  ok(/REQUIREMENTS_OPERATOR_ARTIFACTS[^=]*= \[REQUIREMENTS_PRE_CORRECTION_ARTIFACT, REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT\]/.test(namesSrc), 'the requirements exclusion list names both stored artifacts');
 });
 
 test('AE-P2-4 (V-5d rescue pin 1): a throw after the loop writes NO held row — the package writer is reached only inside the terminal SUCCESS tx, and the rescue path hands no held stamps', () => {

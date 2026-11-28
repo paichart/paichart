@@ -293,37 +293,10 @@ UNION ALL SELECT '🔴 flag-off decisions on FIRED facts after the flag-on cut (
   count(*) FILTER (WHERE (f->>'triggerHitsTotal')::int > 0 AND f->'correction'->>'notAttemptedReason' = 'flag-off')::text FROM on_;
 
 \echo
-\echo ============ REQUIREMENTS FORM CORRECTION — toolLoop.requirementsFormCheck.correction (adoption rule 3 from 2026-10-12; rule 4 = Z66 citation identity, from its deploy) ============
--- Panel cline_docs/reviews/correction-adoption-severity-2026-10-11/ §3H. Every 🔴 is 0 by construction on correct code.
--- Rule 4 (Z66) is counted in the `v3` rows (version >= 3) and split per version below; its three new refusal markers
--- (citationsNewlyUncited / citationsNewlyNotVerbatim / citationsNarrowed) can appear only on a NOT-adopted attempt, so
--- every 🔴 below stays 0 by construction.
--- An `unwaivable-cleared` adoption is NOT a finding: each one is a clause read the owner made at publish
--- (--clause-read); read the false-flag share from those names. The FIRST read that finds a flag REAL is the
--- tightening trigger at REQUIREMENTS_ADOPTION_MAX_NEW_CLAUSE_FLAGS (set it to 0 in the next deploy).
-WITH rc AS (SELECT t, j->'toolLoop'->'requirementsFormCheck'->'correction' c FROM _a
-            WHERE name = 'result.json' AND jsonb_typeof(j->'toolLoop'->'requirementsFormCheck'->'correction') = 'object'),
-v3 AS (SELECT * FROM rc WHERE (c->>'adoptionRuleVersion')::int >= 3 AND c->>'attempted' = 'true')
-SELECT '⚪ control: correction attempts, every rule' AS line, count(*) FILTER (WHERE c->>'attempted' = 'true')::text AS value FROM rc
-UNION ALL SELECT '⚪ rule ≥ 3 live since (empty ⇒ no rule-3 attempt yet: an ABSENCE)', coalesce(to_char(min(t), 'YYYY-MM-DD HH24:MI'), '(empty)') FROM v3
-UNION ALL SELECT '· rule ≥ 3 attempts', count(*)::text FROM v3
--- Z66 review F4: never pool rule 3 and rule 4 — rule 4 adopts merged/duplicate citations rule 3 refused.
-UNION ALL SELECT '· … rule ' || (c->>'adoptionRuleVersion') || ' attempts (live since ' || to_char(min(t), 'YYYY-MM-DD HH24:MI') || ')', count(*)::text
-  FROM v3 GROUP BY c->>'adoptionRuleVersion'
-UNION ALL SELECT '· … rule ' || (c->>'adoptionRuleVersion') || ' adopted', count(*) FILTER (WHERE c->>'adopted' = 'true')::text
-  FROM v3 GROUP BY c->>'adoptionRuleVersion'
-UNION ALL SELECT '· … adopted, arm ' || (c->>'adoptionArm'), count(*)::text FROM v3 WHERE c->>'adopted' = 'true' GROUP BY c->>'adoptionArm'
-UNION ALL SELECT '· … not adopted: ' || (c->>'notAdoptedReason'), count(*)::text FROM v3 WHERE c->>'adopted' = 'false' GROUP BY c->>'notAdoptedReason'
-UNION ALL SELECT '🔴 adopted with a regression other than clause flags (kill criterion)',
-  count(*) FILTER (WHERE c->>'adopted' = 'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(c->'regressedMeasures', '[]')) m
-                    WHERE m NOT IN ('clauses', 'clausesNewlyDropped')))::text FROM v3
-UNION ALL SELECT '🔴 adopted WITH a regression on an arm other than unwaivable-cleared',
-  count(*) FILTER (WHERE c->>'adopted' = 'true' AND jsonb_array_length(coalesce(c->'regressedMeasures', '[]')) > 0
-                    AND c->>'adoptionArm' IS DISTINCT FROM 'unwaivable-cleared')::text FROM v3
-UNION ALL SELECT '🔴 unwaivable-cleared with more than 1 newly flagged clause (the cap)',
-  count(*) FILTER (WHERE c->>'adoptionArm' = 'unwaivable-cleared' AND (c->>'clausesNewlyDroppedTotal')::int > 1)::text FROM v3
-UNION ALL SELECT '🔴 not adopted, a text came back, and no not-adopted artifact pointer (1b lost the correction)',
-  count(*) FILTER (WHERE c->>'adopted' = 'false' AND c->>'notAdoptedReason' NOT IN ('empty', 'llm-error') AND NOT c ? 'notAdoptedText')::text FROM v3;
+\echo ============ REQUIREMENTS FORM CORRECTION — RETIRED 2026-11-28 (the requirements Author is retired; its writer was removed in parcel A) ============
+-- The section read stored toolLoop.requirementsFormCheck.correction. Its population is closed (the last requirements_author run
+-- predates the series cut 2026-11-27T03:04:19Z), its 🔴 lines were 0 by construction, and the constant it named
+-- (REQUIREMENTS_ADOPTION_MAX_NEW_CLAUSE_FLAGS) was deleted. History: the ledger and cline_docs/reviews/author-sunset-2026-11-27/.
 
 \echo
 \echo ============ CONTAINMENT DELEGATION — consuming-leg-upstream-delegated (PHASE4-CONTAINMENT-PROPAGATION, 2026-10-12) ============

@@ -42,8 +42,8 @@
  * persisted requirements_author and the requirements_reviewer that reviewed it, with no held binding and no carrier (its leg outcome is
  * the harness row's qualityGate). Persisted Author only: a live Requirements Author needs the whole owner-answer input set and its
  * correction turn reads the wall clock. A Reviewer model lever reaches it (fail-closed, as for value legs); an Author model lever does
- * not (`requirementsAuthor` is its own tier). `ownerRowItemMap` names the run's stored owner map, copied into the node so the lab's
- * in-run form-check control reads the map the run had (no prompt byte depends on it).
+ * not (a requirements case is persisted-only; its `requirementsAuthor` tier was removed 2026-11-28). `ownerRowItemMap` named the run's
+ * stored owner map for the lab's in-run form-check control, which was removed 2026-11-28 with the retired Author (parcel A).
  *
  * RE-FREEZE (owner decision only): add a case when a program releases or a window passes, with a hand-read verdict and
  * provenance; record it in `refreezes` (what was added, what was left out and why, which pins moved) and bump `version`
@@ -477,7 +477,7 @@ function buildOneCompanion(labDir: string, lab: LabExperiment, gs: GoldenSet, go
       let any = false;
       if (reachR.length) { add(`g${arm}${dom}r`, 'persisted', reachR, { authorSource: 'persisted' }); any = true; }
       if (reachA.length && c.authorForms.includes('live') && v.authorSource !== 'persisted') {
-        add(`g${arm}${dom}a`, 'live', reachA, { authorModel: v.authorModel ?? (c.shape === 'value' ? AGENT_MODELS.infra : c.shape === 'requirements' ? AGENT_MODELS.requirementsAuthor : AGENT_MODELS.infraAuthor), authorEffort: v.authorEffort ?? 'high', heldEditCorrection: v.heldEditCorrection ?? true });
+        add(`g${arm}${dom}a`, 'live', reachA, { authorModel: v.authorModel ?? (c.shape === 'value' ? AGENT_MODELS.infra : AGENT_MODELS.infraAuthor) /* a requirements case is persisted-only (validated at load), so never reaches this live branch; its requirementsAuthor tier was removed 2026-11-28 (parcel A) */, authorEffort: v.authorEffort ?? 'high', heldEditCorrection: v.heldEditCorrection ?? true });
         any = true;
       }
       if (!any) unreached.push({ case: c.id, arm, why: reachA.length ? 'the lever reaches only the Author, and this case is scored on the persisted Author'

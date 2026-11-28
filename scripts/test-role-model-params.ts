@@ -44,9 +44,14 @@ for (const [role, p] of Object.entries(ROLE_MODEL_PARAMS)) {
 }
 
 // 4. The measured roles resolve as decided; everything else falls back to the default.
-check('requirements_author resolves to LONG_DOCUMENT_MAX_TOKENS', expectedMaxTokens('requirements_author') === LONG_DOCUMENT_MAX_TOKENS);
-check('requirements_reviewer stays at DEFAULT_MAX_TOKENS (no reviewer output data yet — panel)',
-  expectedMaxTokens('requirements_reviewer') === DEFAULT_MAX_TOKENS);
+// 2026-11-28 (parcel A): the retired requirements_author's 64000 entry was removed with the Author; no role raises maxTokens
+// today. The constant stays as the evidence for the next long-document role, so its watchdog fit is still pinned here.
+check('the retired requirements_author now resolves to DEFAULT_MAX_TOKENS (entry removed)', expectedMaxTokens('requirements_author') === DEFAULT_MAX_TOKENS);
+check('no role raises maxTokens today (the table carries turn-cap entries only)', Object.values(ROLE_MODEL_PARAMS).every((p) => p.maxTokens === undefined));
+{
+  const ms = ((LONG_DOCUMENT_MAX_TOKENS / RUNTIME_LIMITS.OUTPUT_TOKENS_PER_SEC_FLOOR) * 1000) + RUNTIME_LIMITS.TRUNCATION_RETRY_SAFETY_MS;
+  check(`LONG_DOCUMENT_MAX_TOKENS (${LONG_DOCUMENT_MAX_TOKENS}) still fits the default watchdog at the throughput floor`, ms < watchdogMsFor(RUNTIME_LIMITS.DEFAULT_TOOL_TURNS), `${Math.round(ms)} ms`);
+}
 check('an unknown / missing role resolves to DEFAULT_MAX_TOKENS',
   expectedMaxTokens('no_such_role') === DEFAULT_MAX_TOKENS && expectedMaxTokens(undefined) === DEFAULT_MAX_TOKENS);
 
@@ -117,10 +122,9 @@ for (const f of ['seed-program-templates.ts', 'seed-value-chain-templates.ts']) 
 
 // 5. Single source — the owning seed WRITES from the table and the freshness report EXPECTS from it. If either stops
 //    reading it, a reseeded row is reported as permanent drift (or the report's remedy writes the default back).
-const seed = readFileSync(join(__dirname, 'seed-requirements-authoring-templates.ts'), 'utf8');
+//    (The one seed that WROTE maxTokens — seed-requirements-authoring-templates.ts — was deleted 2026-11-28 with the retired Author;
+//    a future maxTokens role's owning seed must write it from expectedMaxTokens(role) and be pinned here.)
 const report = readFileSync(join(__dirname, 'report-template-freshness.ts'), 'utf8');
-check('owning seed writes maxTokens from expectedMaxTokens(role)', /maxTokens:\s*expectedMaxTokens\(role\)/.test(seed));
-check('owning seed passes each template\'s own role', (seed.match(/MODEL_PARAMS\('(?:infra|synthesis|requirementsAuthor)', \d+, '[a-z_]+'\)/g) || []).length === 3);
 check('freshness report expects maxToolTurns from expectedMaxToolTurns(role)', /expectedMaxToolTurns\(role\)/.test(report));
 check('freshness report expects maxTokens from expectedMaxTokens(role)', /expectedMaxTokens\(role\)/.test(report)
   && /checkModelParams\(t\.metadata, t\.defaultRole\)/.test(report));

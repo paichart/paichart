@@ -1788,7 +1788,10 @@ export interface PersistRedaction {
 /** The same R10 control for a further text artifact persisted beside result.json/report.md (G1 B: the requirements
  *  pre-correction draft). Same switch: only an explicit 'false' disables it. R10 v8: the echo pass over the text's OWN collected
  *  tokens (self-contained, so the in-run hash in requirements-form-correction.ts still equals the stored bytes); the result.json
- *  values are not carried here (a requirements draft never reads a secret-bearing tool result — a named residual). */
+ *  values are not carried here (a requirements draft never reads a secret-bearing tool result — a named residual).
+ *  ⚠️ NO PRODUCTION CALLER since 2026-11-28 (parcel A: its two callers, the requirements correction artifacts in
+ *  execution-terminal-persist.ts, were removed with the retired Author). KEPT deliberately (owner decision: an R10 helper; deleting it
+ *  would want a sec-ops review for no gain). Still pinned by test-security-invariants.ts. */
 export function redactExtraArtifactForPersist(text: string): { text: string; redactedCount: number } {
   if (isR10Disabled()) return { text, redactedCount: 0 };
   const sink = new Set<string>();

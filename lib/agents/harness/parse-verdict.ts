@@ -29,15 +29,19 @@
  *  (verified 2026-07-14; fourth domain added 2026-09-10). */
 export const REVIEWER_ROLES = new Set([
   'change_reviewer',
-  // requirements-authoring (2026-09-21). MUST land in the SAME commit as its ROLE_GUIDANCE_LIBRARY
-  // entry: the coupling test below asserts every REVIEWER_ROLE has guidance containing
-  // VERDICT_MARKER, so adding the key alone fails it. Without membership here the reviewer emits
-  // NO structured reviewerVerdict at all — no evidenceGrading, no lean-card Facts line, and the
-  // verdict-mismatch guard falls silent INDISTINGUISHABLY from a legitimately reviewer-less run.
+  // requirements-authoring (2026-09-21). RETIRED 2026-11-28 (parcel A): its guidance was removed with the retired Author, but the
+  // role STAYS here because this set classifies STORED rows — reviewer-warnings-enrichment.ts filters a leg's reviewers by it, and
+  // leg-reviewers / orchestrator-reexecution read it — so dropping it would move stored facts on a nets replay (REVIEW-execution-
+  // facts C1). It is also in RETIRED_REVIEWER_ROLES below, which the guidance-coupling test skips.
   'requirements_reviewer',
   // value-chain build B3 (2026-10-02): the value leg's reviewer. Same commit as its guidance (coupling test).
   'derivation_reviewer',
 ]);
+
+/** REVIEWER_ROLES members whose role is RETIRED: kept in the set to classify stored rows, with no live guidance (2026-11-28, the
+ *  requirements Author retired — the value-chain PROGRAM_PROTOCOL_NAMES precedent: a retired name stays registered). The
+ *  guidance-coupling test iterates REVIEWER_ROLES minus this set. KEPT PERMANENTLY. */
+export const RETIRED_REVIEWER_ROLES: ReadonlySet<string> = new Set(['requirements_reviewer']);
 
 /**
  * The REVIEWER SET for re-execution policy (RWF C.1/C.2): template type REVIEWER, or a role in REVIEWER_ROLES.

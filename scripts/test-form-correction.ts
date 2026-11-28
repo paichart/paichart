@@ -371,9 +371,9 @@ function input(text: string, over: Record<string, unknown> = {}) {
     ok(!/\/author\/i/.test(core), 'a role regex crept into the core');
   });
   await test('Step B: the deliverable is reassigned ONLY inside the adopted branch', () => {
-    // End bound = the next sibling block (2026-10-09, 2b: the requirements correction sits between this block and
-    // onStoringResults; it carries its own adopted-branch pin in test-requirements-form-correction.ts).
-    const endB = core.indexOf('// REQUIREMENTS FORM CHECK + CORRECTION');
+    // End bound = the next sibling block, the held-edit step (2026-11-28: the requirements correction that sat between them was
+    // removed with the retired Author; without this bound the slice would take in the held-edit block's reassignments).
+    const endB = core.indexOf('// PLATFORM-HELD-BYTES Stage B V-5a/V-5c');
     const blockB = core.slice(core.indexOf('// FORM CORRECTION (Step B'), endB > 0 ? endB : core.indexOf('await observers.onStoringResults'));
     const adopted = blockB.slice(blockB.indexOf('if (_fc.correction.adopted) {'), blockB.indexOf('} else {', blockB.indexOf('if (_fc.correction.adopted) {')));
     ok(blockB.length > 500 && adopted.length > 50, `slices: ${blockB.length} / ${adopted.length}`);

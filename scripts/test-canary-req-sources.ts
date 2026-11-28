@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkSources } from './check-requirements-sources';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier , readRuleWidened } from './canary-req-sources';
+import { configContractEqualsSpec, contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier , readRuleWidened } from './canary-req-sources';
 import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources, DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
 
@@ -107,7 +107,7 @@ t('one parser: canary-req-sources.ts holds no separator character', !src.include
 t('one parser: canary-req-sources.ts holds no kind literal', DEVICE_SOURCE_KINDS.every((k) => !code.includes(`'${k}'`) && !code.includes(`"${k}"`)));
 const canary = fs.readFileSync(path.join(__dirname, 'canary-check.ts'), 'utf8');
 t('the card regex is the one vlg-h4 reads the card with', canary.includes(`/${CARD_WORD_RE.source}/`));
-for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-snapshot-contract', 'req-src-value-card-git-only']) {
+for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-snapshot-contract', 'req-src-value-card-git-only', 'req-cfg-contract-equals-spec']) {
   t(`canary-check.ts registers ${n}`, canary.includes(`'${n}': {`));
 }
 
@@ -227,6 +227,46 @@ for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-
     readRuleWidened([leg({ snapshot: false })]).verdict === 'UNEXERCISED' && readRuleWidened([leg({ protocol: 'observability-config-protocol' })]).verdict === 'UNEXERCISED'
     && readRuleWidened([leg({ harvesters: [null] })]).verdict === 'UNEXERCISED');
 }
+
+// ── configContractEqualsSpec (2026-11-27, owner item 4): the Config sources counterpart of contractEqualsSpec ─────────────────
+console.log('configContractEqualsSpec');
+const TF_LINES = [
+  `archive-tf: git-file${D}service github-service ; paichart/paichart-configs/terraform/archive.tf`,
+  `prod-state: live-read${D}service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json`,
+];
+const K8S_LINES = [`policy: git-file${D}service github-service ; paichart/paichart-configs/k8s/trading/netpol.yaml`];
+const cfgFenced = (lines: string[]) => ['```', '## Config sources', ...lines, '```'].join('\n');
+const cfgSpec = (o: { tf?: string[] | null; k8s?: string[] | null } = {}) => {
+  const tf = o.tf === undefined ? TF_LINES : o.tf, k8s = o.k8s === undefined ? K8S_LINES : o.k8s;
+  return ['# Requirements', '',
+    '## Pipeline 1 objective — archive bucket owner tag (terraform-iac, change)', '', '1. Tag the bucket.', '',
+    ...(tf ? [cfgFenced(tf), ''] : []),
+    '## Pipeline 2 objective — exporter policy (kubernetes-gitops, change)', '', '2. Admit the exporters.', '',
+    ...(k8s ? [cfgFenced(k8s), ''] : []),
+    '## Design decisions', '', '| row | answer |', '|---|---|', ''].join('\n');
+};
+const TFP = 'terraform-iac-protocol', KP = 'kubernetes-gitops-protocol';
+const cfgProgram = (cs: Record<string, unknown> | null, nodeCcs?: Record<string, unknown>): Carrier[] => {
+  const contract = cs ? { configSources: cs } : {};
+  return [
+    { id: 'tf-leg', kind: 'leg', protocol: TFP, contract, metadata: {} },
+    { id: 'k8s-leg', kind: 'leg', protocol: KP, contract, metadata: {} },
+    { id: 'node-c', kind: 'nodeC', protocol: null, contract: nodeCcs ? { configSources: nodeCcs } : contract, metadata: {} },
+  ];
+};
+const CFG_GOOD = { 'terraform-iac': TF_LINES.join('\n'), 'kubernetes-gitops': K8S_LINES.join('\n') };
+const cpre = checkSources(cfgSpec());
+t('the config fixture spec passes the publish check (2 config blocks)', cpre.errors.length === 0 && cpre.blocks.filter((b) => b.grammar === 'config').length === 2, JSON.stringify(cpre.errors));
+t('PASS: both configSources keys equal the spec', configContractEqualsSpec(cfgProgram(CFG_GOOD), cfgSpec()).verdict === 'PASS');
+t('PASS: line order does not count', configContractEqualsSpec(cfgProgram({ ...CFG_GOOD, 'terraform-iac': [...TF_LINES].reverse().join('\n') }), cfgSpec()).verdict === 'PASS');
+t('FINDING: the terraform key drops a line', configContractEqualsSpec(cfgProgram({ ...CFG_GOOD, 'terraform-iac': TF_LINES[0] }), cfgSpec()).verdict === 'FINDING');
+t('FINDING: the terraform key changes a path', configContractEqualsSpec(cfgProgram({ ...CFG_GOOD, 'terraform-iac': TF_LINES.map((l) => l.replace('archive.tf', 'other.tf')).join('\n') }), cfgSpec()).verdict === 'FINDING');
+t('FINDING: the kubernetes leg has no key while the spec gives one', configContractEqualsSpec(cfgProgram({ 'terraform-iac': CFG_GOOD['terraform-iac'] }), cfgSpec()).verdict === 'FINDING');
+t('FINDING: a kubernetes key the spec never gave (invented)', configContractEqualsSpec(cfgProgram(CFG_GOOD), cfgSpec({ k8s: null })).verdict === 'FINDING');
+t('FINDING: Node C carries a different terraform block', configContractEqualsSpec(cfgProgram(CFG_GOOD, { ...CFG_GOOD, 'terraform-iac': TF_LINES[1] }), cfgSpec()).verdict === 'FINDING');
+t('FINDING: a prose note under the key (not source lines)', configContractEqualsSpec(cfgProgram({ ...CFG_GOOD, 'kubernetes-gitops': 'see the requirements' }), cfgSpec()).verdict === 'FINDING');
+t('UNEXERCISED: a spec and contracts with no Config sources at all', configContractEqualsSpec(cfgProgram(null), cfgSpec({ tf: null, k8s: null })).verdict === 'UNEXERCISED');
+t('FINDING: a spec block with no contract key anywhere', configContractEqualsSpec(cfgProgram(null), cfgSpec()).verdict === 'FINDING');
 
 console.log(`\n${fail ? '❌' : '✅'} canary-req-sources: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

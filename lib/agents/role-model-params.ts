@@ -21,7 +21,8 @@ import { DEFAULT_MAX_TOKENS } from '../services/llm/types';
 /**
  * Output ceiling for a role whose deliverable is one long document written in a single call.
  *
- * Earned by `requirements_author` (Phase 1 decision inventory, 2026-09-28): single-call output of
+ * Earned by the retired `requirements_author` (Phase 1 decision inventory, 2026-09-28; its entry below was removed 2026-11-28
+ * with the retired Author, parcel A — kept as the constant's evidence for the next long-document role): single-call output of
  * 24.6K–48.0K tokens, ~73–84% of it adaptive thinking; one run truncated at 48000 (T1-zero,
  * TRUNCATED_PARTIAL_OUTPUT) and another used 44.5K (93%). The binding limit is the execution watchdog,
  * not the model (Sonnet 5 allows 128K): at the 90 tok/s throughput floor, 64000 takes ~711 s against
@@ -50,7 +51,6 @@ export interface RoleModelParams {
 
 /** Roles that depart from the defaults. Keep this small: every entry is a measured need or owner decision, recorded above. */
 export const ROLE_MODEL_PARAMS: Readonly<Record<string, RoleModelParams>> = Object.freeze({
-  requirements_author: { maxTokens: LONG_DOCUMENT_MAX_TOKENS },
   program_architect: { maxToolTurns: PROGRAM_ARCHITECT_MAX_TOOL_TURNS },
   value_chain_architect: { maxToolTurns: PROGRAM_ARCHITECT_MAX_TOOL_TURNS },
 });

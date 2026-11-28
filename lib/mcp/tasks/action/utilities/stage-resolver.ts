@@ -8,10 +8,14 @@
  *
  * Resolution Priority:
  * 1. Direct stageId
- * 2. stageName + phaseId
- * 3. stageName + phaseName + povId
- * 4. Auto-detect stageName in POV (with partial match fallback)
- * 5. Create new stage if stageName provided
+ * CALLER-NAMED PHASE (2026-11-27): when the caller named a phase (phaseId not
+ *    marked phaseIsDefault, or phaseName), the stage is found (exact, then
+ *    partial) or CREATED inside that phase only; no stageName -> first stage in
+ *    it; an unknown phaseName, or a phaseId/phaseName pair that disagree, is
+ *    refused. Nothing below runs.
+ * 2. stageName in the platform's default phase
+ * 4. Auto-detect stageName in POV (with partial match fallback) — no caller phase only
+ * 5. Create new stage in the default phase if stageName provided
  * 5.5. **phaseId-only honor (task #92, 2026-04-16)** — if caller supplied
  *      phaseId without stageName/stageId, return the first stage IN THAT PHASE
  *      rather than crossing phase boundaries. Refuse if the supplied phase
@@ -41,8 +45,10 @@ export async function resolveStageForTask(params: {
   phaseName?: string;
   povId?: string;
   title?: string;
+  /** true when phaseId was chosen by the platform (PLANNING/first phase), not named by the caller */
+  phaseIsDefault?: boolean;
 }): Promise<{ stageId: string; phaseId: string }> {
-  const { stageId, stageName, phaseId, phaseName, povId, title } = params;
+  const { stageId, stageName, phaseId, phaseName, povId, title, phaseIsDefault } = params;
 
   mcpLogger.debug({ stageId, stageName, phaseId, phaseName, povId }, 'Stage resolution started');
 
@@ -133,10 +139,103 @@ export async function resolveStageForTask(params: {
     }
   };
 
-  // Priority 2: Use stageName + phaseId (exact phase specified)
+  // CALLER-NAMED PHASE (2026-11-27, TASK-CREATE-PHASENAME-IGNORED-ON-NEW-STAGE).
+  // When the CALLER named a phase (phaseId, or phaseName), every stage lookup
+  // and every auto-create happens INSIDE that phase — never a POV-wide search,
+  // never the PLANNING fallback. Before this, the handler pre-resolved phaseId to
+  // the PLANNING/first phase whenever phaseId was absent and Priority 5 preferred
+  // that phaseId over the caller's phaseName, so a NEW stageName was CREATED in the
+  // first phase (prod repro 2026-11-26T08:55:34Z); and Priority 4 could REUSE a
+  // same-named (or partially matching) stage from another phase. A phaseId chosen
+  // by the platform (phaseIsDefault) is not a caller choice and keeps the old
+  // auto-detect cascade below.
+  let scopedPhaseId: string | undefined;
+  if (phaseId && !phaseIsDefault) {
+    await assertPhaseInPov(phaseId);
+    if (phaseName) {
+      const named = await prisma.phase.findUnique({ where: { id: phaseId }, select: { name: true } });
+      if (named && named.name.toLowerCase() !== phaseName.toLowerCase()) {
+        throw new Error(
+          `phaseId "${phaseId}" is phase "${named.name}" but phaseName is "${phaseName}". ` +
+          `Refusing to guess which phase the task belongs in — supply one of them, or two that agree.`
+        );
+      }
+    }
+    scopedPhaseId = phaseId;
+  } else if (phaseName && povId) {
+    // Exact, then partial — the same lookup stage.create uses (stage-create-handler.ts).
+    const named =
+      (await prisma.phase.findFirst({
+        where: { povId, name: { equals: phaseName, mode: 'insensitive' } },
+        orderBy: { order: 'asc' },
+        select: { id: true }
+      })) ??
+      (await prisma.phase.findFirst({
+        where: { povId, name: { contains: phaseName, mode: 'insensitive' } },
+        orderBy: { order: 'asc' },
+        select: { id: true }
+      }));
+    if (!named) {
+      const phases = await prisma.phase.findMany({ where: { povId }, select: { name: true }, orderBy: { order: 'asc' }, take: 50 });
+      throw new Error(
+        `Phase "${phaseName}" was not found in POV "${povId}". ` +
+        `Phases: ${phases.map(p => `"${p.name}"`).join(', ') || 'None'}. ` +
+        `Refusing to place the task in a different phase.`
+      );
+    }
+    scopedPhaseId = named.id;
+  }
+
+  if (scopedPhaseId) {
+    if (stageName) {
+      // Exact, then partial, match — both INSIDE the named phase only.
+      const exact = await prisma.stage.findFirst({
+        where: { phaseId: scopedPhaseId, name: { equals: stageName, mode: 'insensitive' } },
+        select: { id: true, phaseId: true }
+      });
+      if (exact) return { stageId: exact.id, phaseId: exact.phaseId };
+      const partial = await prisma.stage.findFirst({
+        where: { phaseId: scopedPhaseId, name: { contains: stageName, mode: 'insensitive' } },
+        orderBy: { order: 'asc' },
+        select: { id: true, phaseId: true, name: true }
+      });
+      if (partial) {
+        mcpLogger.debug({ stageId: partial.id, matchedName: partial.name }, 'Stage found by partial match in the named phase');
+        return { stageId: partial.id, phaseId: partial.phaseId };
+      }
+      const newStage = await prisma.stage.create({
+        data: {
+          name: stageName,
+          phaseId: scopedPhaseId,
+          order: await getNextStageOrder(scopedPhaseId),
+          description: `Stage created for task: ${title || 'MCP Task'}`
+        }
+      });
+      mcpLogger.info({ stageId: newStage.id, phaseId: newStage.phaseId, stageName: newStage.name }, 'New stage created in the named phase');
+      return { stageId: newStage.id, phaseId: newStage.phaseId };
+    }
+
+    // Phase named, no stage named (task #92 phaseId-only honor, now also for phaseName):
+    // first stage IN THAT PHASE; refuse if it has none — never cross phases.
+    const firstStageInPhase = await prisma.stage.findFirst({
+      where: { phaseId: scopedPhaseId },
+      orderBy: { order: 'asc' },
+      select: { id: true, phaseId: true }
+    });
+    if (firstStageInPhase) return { stageId: firstStageInPhase.id, phaseId: firstStageInPhase.phaseId };
+    throw new Error(
+      `Phase "${phaseName ?? scopedPhaseId}" has no stages. Provide a stageId/stageName, ` +
+      `or create a stage in this phase first via stage.create. ` +
+      `Refusing to silently relocate the task to a different phase.`
+    );
+  }
+
+  // From here on, no phase came from the caller. phaseId (if any) is the
+  // platform's default (PLANNING/first phase) chosen by the handler.
+
+  // Priority 2: stageName in the default phase
   if (stageName && phaseId) {
-    mcpLogger.debug({ stageName, phaseId }, 'Method 2: stageName + phaseId lookup');
-    // Round 2 hardening: pre-check before honoring phaseId.
+    mcpLogger.debug({ stageName, phaseId }, 'Method 2: stageName + default phaseId lookup');
     await assertPhaseInPov(phaseId);
     const stage = await prisma.stage.findFirst({
       where: {
@@ -149,36 +248,11 @@ export async function resolveStageForTask(params: {
     if (stage) {
       mcpLogger.debug({ stageId: stage.id, phaseId: stage.phaseId }, 'Stage found by name + phaseId');
       return { stageId: stage.id, phaseId: stage.phaseId };
-    } else {
-      mcpLogger.warn({ stageName, phaseId }, 'Stage not found by name + phaseId');
-    }
-  }
-
-  // Priority 3: Use stageName + phaseName + povId (explicit phase name)
-  if (stageName && phaseName && povId) {
-    mcpLogger.debug({ stageName, phaseName, povId }, 'Method 3: stageName + phaseName + povId lookup');
-    const stage = await prisma.stage.findFirst({
-      where: {
-        phase: {
-          povId: povId,
-          name: { equals: phaseName, mode: 'insensitive' }
-        },
-        name: { equals: stageName, mode: 'insensitive' }
-      },
-      include: {
-        phase: { select: { id: true, name: true } }
-      }
-    });
-
-    if (stage) {
-      mcpLogger.debug({ stageId: stage.id, phaseId: stage.phaseId }, 'Stage found by name + phaseName + povId');
-      return { stageId: stage.id, phaseId: stage.phaseId };
-    } else {
-      mcpLogger.warn({ stageName, phaseName, povId }, 'Stage not found by name + phaseName + povId');
     }
   }
 
   // Priority 4: Auto-detect - Find stageName in any phase of the POV
+  // (only reached when the caller named no phase — see CALLER-NAMED PHASE above)
   if (stageName && povId) {
     mcpLogger.debug({ stageName, povId }, 'Method 4: auto-detect stage in POV');
     const stage = await prisma.stage.findFirst({
@@ -219,82 +293,34 @@ export async function resolveStageForTask(params: {
     }
   }
 
-  // Priority 5: Create stage if stageName is provided and we have a target phase
-  if (stageName && (phaseId || (phaseName && povId))) {
-    mcpLogger.info({ stageName }, 'Method 5: creating new stage');
-
-    let targetPhaseId = phaseId;
-
-    // Resolve phase if only phaseName is provided
-    if (!targetPhaseId && phaseName && povId) {
-      const phase = await prisma.phase.findFirst({
-        where: {
-          povId: povId,
-          name: { equals: phaseName, mode: 'insensitive' }
-        }
-      });
-
-      if (phase) {
-        targetPhaseId = phase.id;
-        mcpLogger.debug({ phaseId: phase.id }, 'Target phase resolved');
+  // Priority 5: Create the new stageName in the default phase
+  if (stageName && phaseId) {
+    mcpLogger.info({ stageName }, 'Method 5: creating new stage in the default phase');
+    await assertPhaseInPov(phaseId);
+    const newStage = await prisma.stage.create({
+      data: {
+        name: stageName,
+        phaseId: phaseId,
+        order: await getNextStageOrder(phaseId),
+        description: `Stage created for task: ${title || 'MCP Task'}`
       }
-    }
-
-    if (targetPhaseId) {
-      // Round 2 hardening: also pre-check before AUTO-CREATING a stage in
-      // the supplied phase. Without this, an attacker with access to POV A
-      // who knows POV B's phaseId could call task.create(povId:A,
-      // phaseId:B, stageName:'evil') and create a fresh stage inside
-      // POV B's phase. Defense applies even when targetPhaseId came from
-      // a phaseName lookup scoped to povId (the lookup at L200 was already
-      // scoped, but defense-in-depth: re-check the resolved targetPhaseId).
-      await assertPhaseInPov(targetPhaseId);
-      const newStage = await prisma.stage.create({
-        data: {
-          name: stageName,
-          phaseId: targetPhaseId,
-          order: await getNextStageOrder(targetPhaseId),
-          description: `Stage created for task: ${title || 'MCP Task'}`
-        }
-      });
-
-      mcpLogger.info({ stageId: newStage.id, phaseId: newStage.phaseId, stageName: newStage.name }, 'New stage created');
-      return { stageId: newStage.id, phaseId: newStage.phaseId };
-    }
+    });
+    mcpLogger.info({ stageId: newStage.id, phaseId: newStage.phaseId, stageName: newStage.name }, 'New stage created');
+    return { stageId: newStage.id, phaseId: newStage.phaseId };
   }
 
-  // Priority 5.5 (task #92, 2026-04-16): phaseId-only honor — caller supplied
-  // phaseId but no stageName/stageId, so return the first stage IN THAT PHASE
-  // rather than falling through to PLANNING fallback (which crosses phase
-  // boundaries silently — the bug task #92 fixes).
-  //
-  // The cascade above (priorities 1-5) all require stageName or stageId. None
-  // of them respect phaseId-only input. Without this branch, a phaseId-only
-  // call falls to priority 6 (PLANNING fallback) which ignores phaseId entirely.
-  //
-  // Refuse if the supplied phase has zero stages — fail loud per task #85's
-  // "loud failures, not silent" principle. Don't auto-create here; the caller
-  // can invoke stage.create explicitly if they want a new stage.
+  // Priority 5.5: default phase, no stageName — first stage in that phase
+  // (unchanged from task #92; refuse if it has none).
   if (phaseId && !stageName) {
-    mcpLogger.debug({ phaseId }, 'Method 5.5: phaseId-only honor — looking for first stage in supplied phase');
-    // Round 2 hardening: pre-check before honoring caller-supplied phaseId.
-    // Originally caught by Round 2 probe (sibling of Wave A C3 stageId);
-    // shared helper now covers all 3 phaseId-consuming sites uniformly.
     await assertPhaseInPov(phaseId);
-
     const firstStageInPhase = await prisma.stage.findFirst({
       where: { phaseId },
       orderBy: { order: 'asc' },
       select: { id: true, phaseId: true, name: true }
     });
-
     if (firstStageInPhase) {
-      mcpLogger.debug({ stageId: firstStageInPhase.id, phaseId: firstStageInPhase.phaseId, stageName: firstStageInPhase.name },
-        'Honoring caller-supplied phaseId — using first stage in that phase');
       return { stageId: firstStageInPhase.id, phaseId: firstStageInPhase.phaseId };
     }
-
-    // Phase exists but has zero stages — refuse, don't cross boundaries
     throw new Error(
       `Phase "${phaseId}" has no stages. Provide a stageId/stageName, ` +
       `or create a stage in this phase first via stage.create. ` +

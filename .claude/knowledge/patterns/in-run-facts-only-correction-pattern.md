@@ -1,5 +1,9 @@
 # In-run facts-only correction — pattern
 
+> **2026-11-28:** the requirements instance of this pattern (`requirements-form-check` / `requirements-form-correction`, the
+> publish-check port and its suites) was REMOVED with the retired requirements Author (parcel A). The terraform/package instance
+> (`package-form-check.ts`, `form-correction.ts`) and the held-edit correction are live. The requirements rows below are history.
+
 **Status:** 2 production instances (2026-10-06 terraform `config_change_author`; 2026-10-09 `requirements_author`).
 A third turn of the same shape exists in code — the held-edit correction (`lib/agents/harness/held-edit-correction.ts`, one
 tool-less reflection turn behind `HELD_EDIT_CORRECTION_ENABLED`, adoption rule v1, reusing the requirements time budget). Noted

@@ -35,14 +35,7 @@
  *   npm run lab:leg-replay -- n2-score --run <runs,> --experiment <dir>                  # L-N2 Author readings (score-n2) + the node-driven Reviewer bench (score-reviewer-bench); n2-self-test · bench-self-test
  *   npm run lab:leg-replay -- chain-identity-diff --experiment <dir> --node <id|authorExecId>  # why a control reads chain patch identity ✗, $0
  *   npm run lab:leg-replay -- oa-score --run <runs,> --experiment <dir>                  # L-OA Author readings (score-oa) + the node-driven Reviewer bench; oa-self-test
- *   npm run lab:leg-replay -- score-self-test --experiment <dir>                       # requirements scorer reproduces stage A, $0
- *   npm run lab:leg-replay -- score --run <runDir> --experiment <dir>                  # requirements scores + gate inputs, $0
  *   npm run lab:leg-replay -- blind --run <runDir> --out <dir>                         # arm-blind copies for the hand read, $0
- *   npm run lab:leg-replay -- z49-self-test --experiment <dir>                         # Z49 stanza/row scorer on persisted + planted drafts, $0
- *   npm run lab:leg-replay -- z49-score --run <runDir>[,<runDir>] --experiment <dir>   # Z49 gate inputs (G-STANZA, G-ROW, G-NOWORSE), $0
- *   npm run lab:leg-replay -- g4-self-test --experiment <dir>                          # group 4 scorer on persisted + planted drafts, $0
- *   npm run lab:leg-replay -- g4-score --run <runDir>[,<runDir>] --experiment <dir>    # group 4 gate inputs (G-ITEM, G-SCOPE, G-EMPTY, G-COLL, G-PREMISE, G-NOWORSE), $0
- *   npm run lab:leg-replay -- g4-noworse-dump --experiment <dir> --check-at <c> --out <f>  # P8: G-NOWORSE findings under this tree's code, $0
  *   npm run lab:leg-replay -- quote-self-test --experiment <dir>                       # harvester quote score on persisted + planted harvests, $0
  *   npm run lab:leg-replay -- edits-score --run <runDir>[,<runDir>] --experiment <dir>    # L-5 G1 edit scores + gate inputs, $0
  *   npm run lab:leg-replay -- held-id-check                                            # G-HOLD-ID: L-1 base hashes = prod held_blobs (read-only), $0
@@ -104,12 +97,8 @@ import { appendReviewerWarningsSection } from '../../lib/services/report-warning
 import { parseConfidenceScore } from '../../lib/agents/harness/parse-confidence';
 import { costForExecution } from '../../lib/services/llm/model-pricing';
 import { capabilitiesFor } from '../../lib/services/llm/model-capabilities';
-import { isRequirementsFormCheckEligible } from '../../lib/agents/harness/requirements-form-check';
-import { computeRequirementsFormCheckStamp, failingTriggerChecks, requirementsInputsFromHarnessRow, REQUIREMENTS_FORM_CORRECTION_FLAG } from '../../lib/agents/harness/requirements-form-correction';
-import { harnessRowWithOwnerMap, readOwnerMap } from './score-requirements';
 import { applyEdits, type EditSpec } from './edits';
 import { snapshotWithInputEdits } from './input-edits';
-import { installCheckDataAt, checkDataLabel } from './check-at';
 import { buildLabHeldStore, labHeldViewFields, labResolveHeldFiles, type LabHeldStore } from './held-store';
 import { heldVariantProtocolAt, snapshotWithVariantBinding, snapshotWithHeldJoin, type VariantBindingReport } from './variant-binding';
 import { patchAuthorContext } from './chain';
@@ -151,8 +140,8 @@ const RUNS_DIR = path.join(__dirname, 'runs');
  *  exactly-once replace ops to the Author package BEFORE the leaf nets and the chain — a planted defect or restatement
  *  on an otherwise real package. A non-unique or missing anchor fails the dry run. */
 /** `reviewerExecutionId` (L-R1, 2026-10-09): name the node's reviewer instead of deriving it (the snapshot pairs by the
- *  shipping REVIEWER_ROLES set otherwise). `ownerRowItemMap` (requirements_author): a v1 owner-map JSON file, placed in a
- *  COPY of the harness row's `metadata.requirementsRowItemMap` for the in-run form check only — never in a prompt. */
+ *  shipping REVIEWER_ROLES set otherwise). (`ownerRowItemMap`, the requirements_author owner map, was REMOVED 2026-11-28 with the
+ *  retired Author's in-run check; a node that still names one is refused at prepare.) */
 /** `inputEdits` (L-Z1, 2026-10-10): an EditSpec applied exactly once to each of its targets (`leg:description`,
  *  `author-task:description`, `reviewer-task:description`) on a DEEP COPY of the cached snapshot — what the node's agents
  *  were GIVEN changes, in every variant alike (see input-edits.ts). */
@@ -192,18 +181,14 @@ interface Experiment {
   /** `authorSource: 'persisted'` (L0a, 2026-10-08): no Author call is made — the persisted package (plus the node's
    *  `authorPlant`, if any) stands in, with its persisted confidence / qualityMetrics / formCheck. $0, no variance:
    *  the Reviewer is the only thing that varies. Default 'live'. */
-  /** `requirementsFormCorrection` (L-R3, 2026-10-09): the 2b correction turn ON/OFF for THIS arm, independent of the
-   *  process env — so `opusBase` vs `opusLoop` differ only in this lever. Unset ⇒ the env (REQUIREMENTS_FORM_CORRECTION_ENABLED).
-   *  Setting it on any arm while `flags` also sets the env is refused (two sources for one lever). */
-  /** `requirementsCheckAt` (L-Z2, 2026-10-10): the in-run requirements check (and its scoring) runs on the generated
-   *  registry + template data AT THIS COMMIT for this arm; unset ⇒ HEAD's. Groups of different data run one after the
-   *  other, never interleaved (check-at.ts). */
+  /** `requirementsFormCorrection` (L-R3) and `requirementsCheckAt` (L-Z2): REMOVED 2026-11-28 with the retired requirements
+   *  Author's in-run check (parcel A). An experiment that still sets either is refused at prepare (never silently ignored). */
   /** PLATFORM-HELD-BYTES Stage B (L-2): `protocolName` + `protocolSource: 'commit:<sha>'` run the arm under the held variant
    *  (the seed's render at that commit, refused unless that commit's obs base = the pinned baseline), on a REBOUND snapshot copy,
    *  with the Author's Harvester entry carrying `heldView` (L-1 + L-3) and the shipping edit step in the loop.
    *  `heldEditCorrection`: the edit step's one correction turn for THIS arm (unset ⇒ HELD_EDIT_CORRECTION_ENABLED; both set is
    *  refused — one lever, two sources). `authorOnly`: no Reviewer call (G1 scores the Author mechanically). */
-  variants: Record<string, { edits: string[]; templateEdits?: string[]; dropTemplateDirective?: boolean; authorModel?: string; reviewerModel?: string; authorEffort?: string; reviewerEffort?: string; authorSource?: 'live' | 'persisted'; requirementsFormCorrection?: boolean; requirementsCheckAt?: string;
+  variants: Record<string, { edits: string[]; templateEdits?: string[]; dropTemplateDirective?: boolean; authorModel?: string; reviewerModel?: string; authorEffort?: string; reviewerEffort?: string; authorSource?: 'live' | 'persisted';
     protocolName?: string; protocolSource?: string; heldEditCorrection?: boolean; authorOnly?: boolean;
     /** held-k8s step 3 (L-K-e, L-K2): a JOINED domain's held arm — no variant. The protocol is the arm's own candidate (baseline +
      *  edits), the leg keeps its protocol stamp, and the Author/Reviewer template constraints are the OWNING seed's
@@ -331,14 +316,11 @@ function buildCandidates(dir: string, refresh: boolean) {
     manifest[`inputEdits:${nd.id}`] = r;
     console.log(`  input edit ${nd.id}: ${r.edit} → ${Object.entries(r.targets).map(([t, x]) => `${t} ${x.beforeChars}→${x.afterChars}`).join(' · ')}`);
   }
-  // Check data (L-Z2): every pinned commit must resolve and carry the generated data.
-  for (const [v, spec] of Object.entries(exp.variants)) {
-    if (!spec.requirementsCheckAt) continue;
-    const d = installCheckDataAt(spec.requirementsCheckAt);
-    installCheckDataAt(null);
-    manifest[`requirementsCheckAt:${v}`] = { commit: spec.requirementsCheckAt, ...d };
-    console.log(`  ${v}: in-run check data ${d.source} (registry ${d.registrySha256.slice(0, 12)}, template ${d.templateSha256.slice(0, 12)})`);
+  // Retired levers (2026-11-28, parcel A): refuse an experiment that still sets them, rather than ignore them silently.
+  for (const [v, spec] of Object.entries<any>(exp.variants)) {
+    for (const k of ['requirementsFormCorrection', 'requirementsCheckAt']) if (spec?.[k] !== undefined) throw new Error(`variant ${v} sets ${k}: retired 2026-11-28 with the requirements Author's in-run check`);
   }
+  for (const nd of exp.nodes as any[]) if (nd?.ownerRowItemMap !== undefined) throw new Error(`node ${nd.id} names ownerRowItemMap: retired 2026-11-28 with the requirements Author's in-run check`);
   fs.writeFileSync(path.join(dir, 'experiment.json'), JSON.stringify(exp, null, 2) + '\n');
   fs.writeFileSync(path.join(dir, 'protocols', 'MANIFEST.json'), JSON.stringify(manifest, null, 2) + '\n');
   console.log(`✅ candidates built; sha256 pinned in experiment.json and protocols/MANIFEST.json`);
@@ -727,12 +709,6 @@ interface PersistedAuthor { text: string; plantId: string | null; chainExecution
 interface Job { node: NodeSpec; variant: string; protocol: ProtocolText; snap: Snapshot; author: RebuiltPrompt; reviewerBase: RebuiltPrompt | null; reviewerTemplate: string | null; dropTemplateDirective: boolean; reviewerModel: string | null; reviewerEffort: string | null;
   /** L0a: set when the variant's authorSource is 'persisted' — the package, its leaf stamps and the exact Reviewer prompt. */
   persistedAuthor: PersistedAuthor | null;
-  /** L-R3: the arm's correction flag (null ⇒ the env decides). */
-  requirementsFormCorrection: boolean | null;
-  /** The harness row the in-run requirements check reads (the node's owner map placed in a copy); null for other roles. */
-  requirementsHarnessRow: Record<string, any> | null;
-  /** L-Z2: the commit whose in-run check data this arm runs (null ⇒ HEAD's). */
-  checkAt: string | null;
   /** Recorded tools: the node's production calls (null ⇒ the stub). */
   stored: StoredCall[] | null;
   /** Stage B: the held-variant arm's binding (null on every other arm). */
@@ -845,18 +821,6 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
     const rwFact = (ctlLeg?.stamped.reviewerWarnings ?? null) as Record<string, any> | null;
     const rwNa = !!ctlLeg && ctlLeg.notApplicable.includes('reviewerWarnings') && !rwFact && (snap.leg?.metadata?.reviewerWarnings ?? null) == null;
     const rwOk = rwNa || (!!rwFact && !ctlLeg!.errors.reviewerWarnings && rwFact.reason !== 'enrichment-error' && rwFact.checked === true);
-    // requirements_author: the in-run form check computes on the PERSISTED draft with the node's inputs (objective from
-    // the harness row, owner map when the node names one) — the same stamp a live sample gets.
-    const reqRow = isRequirementsFormCheckEligible(ares.agentRole, snap.author.task.type) ? harnessRowWithOwnerMap(snap, readOwnerMap(dir, node.ownerRowItemMap)) : null;
-    let reqControl: Record<string, any> | null = null;
-    if (reqRow) {
-      const inputs = requirementsInputsFromHarnessRow(reqRow);
-      const st: any = computeRequirementsFormCheckStamp({ text: ares.finalResponse, stopReason: 'end_turn', textSource: 'loop', inputs });
-      const wantMap = node.ownerRowItemMap ? 'present' : 'absent';
-      reqControl = { ok: st.checked === true && inputs.objectiveResolved && st.inputs.ownerRowItemMap === wantMap && st.clauses?.itemMapSource === (node.ownerRowItemMap ? 'owner-map' : 'draft-citations'),
-        ownerRowItemMap: st.inputs.ownerRowItemMap, itemMapSource: st.clauses?.itemMapSource ?? null, objectiveChars: st.inputs.objectiveChars,
-        persistedDraft: { view: st.size?.programViewDelivered ?? null, failing: st.checked ? failingTriggerChecks(st) : ['not-checked'] } };
-    }
     if (rwFact) fs.writeFileSync(path.join(nodeDir, 'control.report-section.md'), appendReviewerWarningsSection('', rwFact).content);
     // L0b: the planted package (identity when the node has no plant).
     const plant = plantFor(dir, node, ares.finalResponse, undefined, true);
@@ -873,7 +837,6 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         shippingParserReproducesPersistedVerdict: !!rv && !!persistedVerdict && rv.approved === persistedVerdict.approved && JSON.stringify(rv.blocking) === JSON.stringify(persistedVerdict.blocking),
         legReviewerWarningsComputes: rwOk,
         legReviewerWarningsNotApplicable: rwNa,
-        requirementsFormCheckComputes: reqControl,
       },
       legReviewerWarningsControl: { fact: rwFact ? { checked: rwFact.checked, reason: rwFact.reason, renderScope: rwFact.renderScope, count: rwFact.count, ids: rwFact.ids } : null, error: ctlLeg?.errors.reviewerWarnings ?? null, otherLegNetErrors: ctlLeg ? Object.keys(ctlLeg.errors).filter((k) => k !== 'reviewerWarnings') : null },
       plant: plant.editId ? { file: node.authorPlant, edit: plant.editId, deltaChars: plant.deltaChars, sha256: sha256(plant.text) } : null,
@@ -921,11 +884,6 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       };
       const authorTemplate = tplFor('author');
       const reviewerTemplate = tplFor('reviewer');
-      const armFlag = exp.variants[v]?.requirementsFormCorrection;
-      if (typeof armFlag === 'boolean' && exp.flags?.[REQUIREMENTS_FORM_CORRECTION_FLAG] !== undefined) {
-        throw new Error(`variant ${v} sets requirementsFormCorrection while experiment.flags sets ${REQUIREMENTS_FORM_CORRECTION_FLAG} — one lever, two sources; remove the flag`);
-      }
-      const checkAt = exp.variants[v]?.requirementsCheckAt ?? null;
       const authorModel = exp.variants[v]?.authorModel ?? null;
       const reviewerModel = exp.variants[v]?.reviewerModel ?? null;
       const authorEffort = exp.variants[v]?.authorEffort ?? null;
@@ -1088,9 +1046,6 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         notes: author.notes,
         ...(heldReport ? { held: heldReport } : {}),
         authorOnly: !!exp.variants[v]?.authorOnly,
-        ...(reqRow ? { requirementsFormCorrection: typeof armFlag === 'boolean' ? `arm:${armFlag ? 'on' : 'off'}` : `env:${process.env[REQUIREMENTS_FORM_CORRECTION_FLAG] === 'true' ? 'on' : 'off'}`,
-          ownerRowItemMap: node.ownerRowItemMap ? { file: node.ownerRowItemMap, sha256: sha256(fs.readFileSync(path.join(dir, node.ownerRowItemMap), 'utf8')) } : null,
-          requirementsCheck: checkDataLabel(checkAt) } : {}),
       };
       if (authorTemplate) fs.writeFileSync(path.join(vd, 'author.template.md'), authorTemplate);
       if (reviewerTemplate) fs.writeFileSync(path.join(vd, 'reviewer.template.md'), reviewerTemplate);
@@ -1279,7 +1234,6 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         nodeReports[node.id].variants[v].authorSource = { source: 'persisted', plant: plant.editId, plantPresence: presence ? { ok: presence.ok, outsidePlantLines: presence.outsidePlant.length, outsidePlant: presence.outsidePlant.slice(0, 40) } : null, ...(pwP.report ? { planWitnessKeys: pwP.report } : {}), leafFacts: summarizeFacts(leafP.stamped), leafNetErrors: leafP.errors, reviewerPromptSha: reviewer.hashes };
       }
       jobs.push({ node, variant: v, protocol, snap, author, reviewerBase, reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel, reviewerEffort, persistedAuthor,
-        requirementsFormCorrection: typeof armFlag === 'boolean' ? armFlag : null, requirementsHarnessRow: reqRow, checkAt,
         stored: node.tools === 'recorded' ? storedCallsOf(snap.author) : null, held, authorOnly: !!exp.variants[v]?.authorOnly,
         objective: objective.state === 'not-requirements-reviewer' ? null : objective });
     }
@@ -1378,7 +1332,7 @@ async function prepareHarvester(exp: Experiment, dir: string, node: NodeSpec, va
       leafNetsReproducePersisted: { markerPresence: JSON.stringify(leaf.stamped.markerPresence ?? null) === JSON.stringify(ares.markerPresence ?? null), rollbackContainment: true, errors: leaf.errors, notApplicable: leaf.notApplicable },
       quoteFidelityComputes: !!qf && qf.checked === true && !leaf.errors.quoteFidelity,
       // No Reviewer and no chain on a harvester node: those controls do not exist here (null, never a borrowed ✓).
-      chainPatchIdentity: null, shippingParserReproducesPersistedVerdict: null, legReviewerWarningsComputes: null, legReviewerWarningsNotApplicable: null, requirementsFormCheckComputes: null,
+      chainPatchIdentity: null, shippingParserReproducesPersistedVerdict: null, legReviewerWarningsComputes: null, legReviewerWarningsNotApplicable: null,
     },
     persistedQuoteFidelity: qf ? { reason: qf.reason, disposition: qf.quoteFidelityDisposition?.disposition, blocks: qf.blocks, lanes: qf.lanes, claims: qf.claims } : null,
     persistedQuoteScore: { ...score, blocks: score.blocks.filter((b) => b.tool) },
@@ -1418,7 +1372,7 @@ async function prepareHarvester(exp: Experiment, dir: string, node: NodeSpec, va
       notes: author.notes,
     };
     jobs.push({ expDir: dir, node, variant: v, protocol, snap, author, reviewerBase: null, reviewerTemplate: null, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel: null, reviewerEffort: null,
-      persistedAuthor: null, requirementsFormCorrection: null, requirementsHarnessRow: null, checkAt: exp.variants[v]?.requirementsCheckAt ?? null,
+      persistedAuthor: null,
       stored: node.tools === 'recorded' ? stored : null, held: null, authorOnly: false, fixture, network });
   }
   return { jobs, report };
@@ -1457,14 +1411,10 @@ function estimate(jobs: Job[], defaultN: number, nOverride?: number) {
     const aRest = j.persistedAuthor ? zero : estimateCall(j.author, aOut, cpt, true, j.author.model);
     const rFirst = j.authorOnly ? zero : estimateCall(rp, rOut, cpt, false, rp.model);
     const rRest = j.authorOnly ? zero : estimateCall(rp, rOut, cpt, true, rp.model);
-    // L-R3: an arm with the 2b correction ON may add one full-document re-emission per sample. Priced as one more cached
-    // Author call with the deliverable turn's output (the R4 rule's own conservative estimate) — counted as if EVERY
-    // sample triggers (stage A: every Opus draft on these nodes would).
-    const corr = j.requirementsFormCorrection === true && !j.persistedAuthor ? estimateCall(j.author, aOut, cpt, true, j.author.model) : zero;
-    const jobUpper = n * (aFirst.cost + rFirst.cost + corr.cost);
-    const jobExpected = aFirst.cost + rFirst.cost + (n - 1) * (aRest.cost + rRest.cost) + n * corr.cost;
-    upper += jobUpper; expected += jobExpected; calls += ((j.persistedAuthor || j.authorOnly ? 1 : 2) + (corr.cost ? 1 : 0)) * n;
-    rows.push(`  ${j.node.id.padEnd(7)} ${j.variant.padEnd(9)}${j.held ? ' [held variant]' : ''} author[${j.persistedAuthor ? `${j.persistedAuthor.source?.startsWith(LAB_SAMPLE_PREFIX) ? 'LAB SAMPLE' : 'PERSISTED'}${j.persistedAuthor.plantId ? `+plant ${j.persistedAuthor.plantId}` : ''}, $0]` : `${shortModel(j.author.model)}/${effortOf(j.author)}] ~${aFirst.inTok} in/${aOut} out${corr.cost ? ' +2b correction' : ''}`} · ${j.authorOnly ? 'no reviewer (authorOnly)' : `reviewer[${shortModel(j.reviewerBase.model)}/${effortOf(j.reviewerBase)}] ~${rFirst.inTok} in/${rOut} out`} · ${n}× ≈ $${jobExpected.toFixed(2)} (≤ $${jobUpper.toFixed(2)} uncached)`);
+    const jobUpper = n * (aFirst.cost + rFirst.cost);
+    const jobExpected = aFirst.cost + rFirst.cost + (n - 1) * (aRest.cost + rRest.cost);
+    upper += jobUpper; expected += jobExpected; calls += (j.persistedAuthor || j.authorOnly ? 1 : 2) * n;
+    rows.push(`  ${j.node.id.padEnd(7)} ${j.variant.padEnd(9)}${j.held ? ' [held variant]' : ''} author[${j.persistedAuthor ? `${j.persistedAuthor.source?.startsWith(LAB_SAMPLE_PREFIX) ? 'LAB SAMPLE' : 'PERSISTED'}${j.persistedAuthor.plantId ? `+plant ${j.persistedAuthor.plantId}` : ''}, $0]` : `${shortModel(j.author.model)}/${effortOf(j.author)}] ~${aFirst.inTok} in/${aOut} out`} · ${j.authorOnly ? 'no reviewer (authorOnly)' : `reviewer[${shortModel(j.reviewerBase.model)}/${effortOf(j.reviewerBase)}] ~${rFirst.inTok} in/${rOut} out`} · ${n}× ≈ $${jobExpected.toFixed(2)} (≤ $${jobUpper.toFixed(2)} uncached)`);
   }
   return { upper, expected, calls, rows };
 }
@@ -1612,9 +1562,7 @@ async function run(args: Args) {
       continue;
     }
     const na = (k: string) => (c.leafNetsReproducePersisted.notApplicable ?? []).includes(k) ? 'n/a ✓' : (c.leafNetsReproducePersisted[k] ? '✓' : '✗');
-    const rq = c.requirementsFormCheckComputes;
-    console.log(`   ${id.padEnd(7)} control pass: leaf nets reproduce persisted [markerPresence ${na('markerPresence')} rollbackContainment ${na('rollbackContainment')}] · chain patch identity ${c.chainPatchIdentity ? '✓' : '✗'} · shipping parser = persisted verdict ${c.shippingParserReproducesPersistedVerdict ? '✓' : '✗'} · leg reviewerWarnings computes ${c.legReviewerWarningsNotApplicable ? 'n/a ✓' : c.legReviewerWarningsComputes ? '✓' : '✗'}${rq ? ` · requirements form check computes ${rq.ok ? '✓' : '✗'} (map ${rq.ownerRowItemMap}/${rq.itemMapSource}, persisted view ${rq.persistedDraft.view}, failing ${rq.persistedDraft.failing.join(',') || 'none'})` : ''}${r.plant ? ` · plant ${r.plant.edit} (${r.plant.deltaChars >= 0 ? '+' : ''}${r.plant.deltaChars})` : ''} (persisted ${r.persisted.approved === true ? 'APPROVED' : r.persisted.approved === false ? 'REFUSED' : '—'})`);
-    for (const [v, vr] of Object.entries<any>(r.variants)) if (vr.requirementsFormCorrection) console.log(`      ${v}: author ${shortModel(vr.models?.author)}/${vr.models?.authorEffort} · 2b correction ${vr.requirementsFormCorrection} · ${vr.requirementsCheck}`);
+    console.log(`   ${id.padEnd(7)} control pass: leaf nets reproduce persisted [markerPresence ${na('markerPresence')} rollbackContainment ${na('rollbackContainment')}] · chain patch identity ${c.chainPatchIdentity ? '✓' : '✗'} · shipping parser = persisted verdict ${c.shippingParserReproducesPersistedVerdict ? '✓' : '✗'} · leg reviewerWarnings computes ${c.legReviewerWarningsNotApplicable ? 'n/a ✓' : c.legReviewerWarningsComputes ? '✓' : '✗'}${r.plant ? ` · plant ${r.plant.edit} (${r.plant.deltaChars >= 0 ? '+' : ''}${r.plant.deltaChars})` : ''} (persisted ${r.persisted.approved === true ? 'APPROVED' : r.persisted.approved === false ? 'REFUSED' : '—'})`);
     if (r.inputEdits) console.log(`      input edit ${r.inputEdits.edit}: ${Object.entries<any>(r.inputEdits.targets).map(([t, x]) => `${t} ${x.beforeChars}→${x.afterChars}`).join(' · ')}`);
     for (const [v, vr] of Object.entries<any>(r.variants)) if (vr.fidelityFailures?.length) console.log(`      ⚠️ ${v}: ${vr.fidelityFailures.join(' | ')}`);
     for (const [v, vr] of Object.entries<any>(r.variants)) { const pp = vr.authorSource?.plant?.presence ?? vr.authorSource?.plantPresence; if (pp) console.log(`      ${v}: plant reaches the Reviewer prompt vs its unplanted twin ✓ · ${pp.outsidePlantLines} derived line(s) differ outside the plant (manifest; read them)`); }
@@ -1664,7 +1612,6 @@ async function run(args: Args) {
     : args.batch ? installBatchTransport({ mode: 'batch', ttl: '1h', log: (m) => console.log(m) }) : null;
   // Author / Reviewer / Architect samples run in the batch scope; Harvesters (many turns, cache-read heavy) stay standard.
   const batchScoped = <T extends { job: Job }>(fn: (t: T) => Promise<void>) => (t: T) => inBatchScope(!!transport && (!!t.job.architectOnly || !!t.job.reviewerBase), () => fn(t));
-  if (transport) for (const j of jobs) if (j.requirementsHarnessRow && (j.architectOnly || j.reviewerBase)) throw new Error(`${j.node.id}: LAB-BATCH-TRANSPORT refuses a requirements_author node (its 2b time decision reads the wall clock)`);
   let spent = 0;
   let stopped = false;
   // L-CS-K cap (2026-11-16): checked before EVERY model call (live.ts setLabCallGuard), not only when a sample starts.
@@ -1689,19 +1636,15 @@ async function run(args: Args) {
   // --n never overrides it. Any other count is overridden by --n, as before.
   const nFor = (job: Job) => (job.node.nByVariant?.[job.variant] === 0 ? 0 : (args.n ?? job.node.nByVariant?.[job.variant] ?? job.node.n ?? n));
   for (const job of jobs) for (let i = 1; i <= nFor(job); i++) samples.push({ job, i });
-  // L-Z2: samples whose arms run different in-run check data never interleave — one data group at a time, HEAD's data
-  // restored after each. Groups run in first-appearance order of their arms.
+  // Samples whose arms bind different module state never interleave — one group at a time. Groups run in first-appearance
+  // order of their arms. (L-Z2's in-run check-data grouping was removed 2026-11-28 with the retired requirements Author.)
   const groups = new Map<string, Array<{ job: Job; i: number }>>();
   // L-CS-N: the live-read kind gate is module state too — the group key carries it, so arms with different gates never interleave.
-  for (const s of samples) { const k = `${s.job.checkAt ?? ''}\u0000${s.job.kindGate ?? ''}`; if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(s); }
-  const checkGroups: Array<{ checkAt: string | null; registrySha256: string; templateSha256: string; samples: number }> = [];
+  for (const s of samples) { const k = `${s.job.kindGate ?? ''}`; if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(s); }
   for (const [gk, groupSamples] of groups) {
-  const [k, gateKey] = gk.split('\u0000');
+  const gateKey = gk;
   bindKindGate((gateKey || null) as ArmKindGate | null);
   if (gateKey) console.log(`   ▸ live-read kind gate ${gateKey} — ${groupSamples.length} sample(s)`);
-  const installed = installCheckDataAt(k || null);
-  checkGroups.push({ checkAt: k || null, registrySha256: installed.registrySha256, templateSha256: installed.templateSha256, samples: groupSamples.length });
-  if (groups.size > 1 || k) console.log(`   ▸ in-run check data ${installed.source} (registry ${installed.registrySha256.slice(0, 12)}) — ${groupSamples.length} sample(s)`);
   await pool(warmFirst ? warmFirstOrder(groupSamples) : groupSamples, args.concurrency ?? 4, warmed(warm, warmFirst, batchScoped(async ({ job, i }) => {
     if (stopped) return;
     if (spent >= maxUsd) { stopped = true; console.log(`   ⛔ cap reached ($${spent.toFixed(2)} ≥ $${maxUsd}) — stopping before further calls`); return; }
@@ -1749,7 +1692,7 @@ async function run(args: Args) {
         aId = pa.chainExecutionId;
         const ares = parsedResult(job.snap.author)!;
         a = { finalResponse: pa.text, finalStopReason: ares.toolLoop?.finalStopReason ?? null, turns: 0, toolCalls: [], formCheck: ares.toolLoop?.formCheck ?? null,
-          requirementsFormCheck: ares.toolLoop?.requirementsFormCheck ?? null, toolCallRecords: [],
+          toolCallRecords: [],
           confidenceScore: ares.confidenceScore ?? null, diagnosticRetryUsed: false, correctionTurnUsed: false, truncationRetryUsed: false, calls: [], costUsd: 0, durationMs: 0 };
         leaf = { stamped: pa.leafStamped, errors: {} };
         authorResult = pa.authorResult ?? persistedAuthorResult(job.snap, pa.text, pa.leafStamped);
@@ -1757,8 +1700,7 @@ async function run(args: Args) {
       } else {
         const r9v = r9VersionInEffect();
         a = await runLive(job.author, { executionId: aId, taskId: job.snap.author.task.id, taskType: job.snap.author.task.type, apiKey,
-          requirementsHarnessRow: job.requirementsHarnessRow ?? job.snap.leg, generateTextOverride: job.held && heldFake ? heldFake(job) : fake('author', job.snap),
-          ...(job.requirementsFormCorrection !== null ? { requirementsFormCorrectionEnabled: job.requirementsFormCorrection } : {}),
+          generateTextOverride: job.held && heldFake ? heldFake(job) : fake('author', job.snap),
           ...(job.held ? { heldEdit: { owningLeg: job.held.owningLeg, inputContext: job.held.authorInputContext, povId: job.snap.author.task.pov_id ?? null,
             resolveHeldFiles: labResolveHeldFiles(job.held.store, r9v), correctionEnabled: job.held.correctionEnabled, r9Version: r9v } } : {}), onCall });
         // Stage B: the variant Author's stamp, built as the core builds it (refWrite named for the lab: it writes no rows).
@@ -1776,7 +1718,7 @@ async function run(args: Args) {
           finalResponse: a.finalResponse, confidenceScore: a.confidenceScore,
           qualityMetrics: { totalTurns: a.turns, hitMaxTurns: a.turns >= job.author.maxToolTurns, responseLength: a.finalResponse.length, toolCallSuccess: { total: a.toolCalls.length, failed: 0, succeeded: a.toolCalls.length } },
           markerPresence: leaf.stamped.markerPresence ?? null, rollbackContainment: leaf.stamped.rollbackContainment ?? null, derivationContainment: null,
-          toolLoop: { formCheck: a.formCheck, ...(a.requirementsFormCheck ? { requirementsFormCheck: a.requirementsFormCheck } : {}) },
+          toolLoop: { formCheck: a.formCheck },
           ...(heldFact ? { editApplication: heldFact } : {}),
           validationToolCalls: leaf.stamped.validationToolCalls, gitDeviceComparison: leaf.stamped.gitDeviceComparison, liveEvidence: leaf.stamped.liveEvidence, gitLiveDrift: leaf.stamped.gitLiveDrift, planWitness: leaf.stamped.planWitness,
         };
@@ -1803,12 +1745,6 @@ async function run(args: Args) {
         reviewer = withModel(await rebuildPrompt(rsnap, 'reviewer', job.protocol, { inputContextOverride: ctx, templatePromptOverride: job.reviewerTemplate, dropTemplateDirective: job.dropTemplateDirective }), job.reviewerModel, job.reviewerEffort);
       }
       fs.writeFileSync(path.join(sd, 'author.md'), a.finalResponse);
-      if (a.requirementsCorrection) {
-        // The read needs both sides of every attempted correction, adopted or not (author.md is the deliverable).
-        fs.writeFileSync(path.join(sd, 'author.pre-correction.md'), a.requirementsCorrection.preCorrectionText);
-        if (a.requirementsCorrection.correctionPrompt !== null) fs.writeFileSync(path.join(sd, 'correction-message.md'), a.requirementsCorrection.correctionPrompt);
-        if (a.requirementsCorrection.correctedRaw !== null) fs.writeFileSync(path.join(sd, 'author.correction-raw.md'), a.requirementsCorrection.correctedRaw);
-      }
       fs.writeFileSync(path.join(sd, 'reviewer.user.md'), reviewer.user);
       const rId = `lab-${job.node.id}-${job.variant}-${i}-r`;
       // 2026-11-10 (objective-of-record.ts): a requirements Reviewer's objective fetch is served its stored answer; under
@@ -1846,7 +1782,7 @@ async function run(args: Args) {
         reachChainPass: reachChainPass(wm, rwFact, section),
         reviewerConfidence: parseConfidenceScore(r.finalResponse),
         author: { confidence: a.confidenceScore, stopReason: a.finalStopReason, turns: a.turns, toolCalls: a.toolCalls, diagnosticRetryUsed: a.diagnosticRetryUsed, formCheck: a.formCheck, chars: a.finalResponse.length,
-          ...(a.requirementsFormCheck ? { requirementsFormCheck: a.requirementsFormCheck, requirementsFormCorrectionEnabledSource: a.requirementsFormCorrectionEnabledSource ?? null } : {}), durationMs: a.durationMs },
+          durationMs: a.durationMs },
         reviewer: { stopReason: r.finalStopReason, turns: r.turns, toolCalls: r.toolCalls, diagnosticRetryUsed: r.diagnosticRetryUsed },
         ...(reviewerTools ? { reviewerTools } : {}),
         leafFacts: summarizeFacts(leaf.stamped), leafNetErrors: leaf.errors,
@@ -1864,7 +1800,6 @@ async function run(args: Args) {
     fs.writeFileSync(path.join(sd, 'sample.json'), JSON.stringify(sample, null, 2));
   })));
   }
-  installCheckDataAt(null);
   resetKindGate();
   transport?.uninstall();
   if (transportProof) {
@@ -1888,7 +1823,7 @@ async function run(args: Args) {
   const sampleSum = sumSampleCosts(out);
   const spendMismatch = Math.abs(sampleSum - spent) > 0.005;
   if (spendMismatch) console.log(`   🔴 SPEND MISMATCH: the run's meter reads $${spent.toFixed(4)} but its sample.json files sum to $${sampleSum.toFixed(4)} — trust the SAMPLE SUM; the lab spend counter is wrong`);
-  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ ...manifest, endedAt: new Date().toISOString(), spentUsd: Math.max(spent, sampleSum), meterUsd: spent, maxUsd, capRule: 'a model call is sent only if spent + (calls in flight + 1) x the largest call so far <= the cap; the only possible overrun is a call dearer than every earlier call of the run', capHits, overCapUsd: Math.max(0, Math.max(spent, sampleSum) - maxUsd), sampleSumUsd: sampleSum, spendMismatch, codeAtEnd: end, codeChangedDuringRun: drift, checkGroups }, null, 2));
+  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ ...manifest, endedAt: new Date().toISOString(), spentUsd: Math.max(spent, sampleSum), meterUsd: spent, maxUsd, capRule: 'a model call is sent only if spent + (calls in flight + 1) x the largest call so far <= the cap; the only possible overrun is a call dearer than every earlier call of the run', capHits, overCapUsd: Math.max(0, Math.max(spent, sampleSum) - maxUsd), sampleSumUsd: sampleSum, spendMismatch, codeAtEnd: end, codeChangedDuringRun: drift }, null, 2));
   if (drift) console.log('   ⚠️ RULE 7: the code or a dirty tracked file CHANGED during the run — the results describe a moving target; re-run before quoting them.');
   summarize(out, exp.measures);
 }
@@ -1994,7 +1929,7 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
   fs.writeFileSync(path.join(nodeDir, 'persisted.architect.md'), ares.finalResponse);
   const report: Record<string, any> = { authorExecutionId: snap.author.exec.id, reviewerExecutionId: null, kind: node.kind, architectOnly: true,
     persisted: { approved: null, blocking: null, authorOutputTokens: snap.author.exec.outputTokens, reviewerOutputTokens: null },
-    controls: { leafNetsReproducePersisted: { markerPresence: true, rollbackContainment: true, errors: {}, notApplicable: [] }, chainPatchIdentity: null, shippingParserReproducesPersistedVerdict: null, legReviewerWarningsComputes: null, legReviewerWarningsNotApplicable: null, requirementsFormCheckComputes: null },
+    controls: { leafNetsReproducePersisted: { markerPresence: true, rollbackContainment: true, errors: {}, notApplicable: [] }, chainPatchIdentity: null, shippingParserReproducesPersistedVerdict: null, legReviewerWarningsComputes: null, legReviewerWarningsNotApplicable: null },
     measuresOnPersisted: {}, variants: {}, ...(vl.report ? { valueLane: vl.report } : {}), ...(gitHarvestX ? { gitHarvest: gitHarvestX.report } : {}) };
   if (ares.agentRole === 'derivation_architect') {
     // L-VLG-c control: the PERSISTED Architect text through the shipping containment net on THIS (possibly re-harvested) snapshot.
@@ -2101,7 +2036,7 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
       fidelityFailures: fid.filter((c) => c.ok === false && c.name !== 'protocolInjection.preambleChars' && c.name !== 'protocolInjection.delta').map((c) => `${c.name}: ${c.detail}`),
       notes: author.notes, ...(held ? { held } : {}), ...(harvesterSource ? { harvesterSource } : {}), authorOnly: true };
     jobs.push({ node, variant: v, protocol, snap, author, reviewerBase: null, reviewerTemplate: null, dropTemplateDirective: !!spec?.dropTemplateDirective, reviewerModel: null, reviewerEffort: null,
-      persistedAuthor: null, requirementsFormCorrection: null, requirementsHarnessRow: null, checkAt: null, stored: null, held: null, authorOnly: true, architectOnly: true, constraintsBound });
+      persistedAuthor: null, stored: null, held: null, authorOnly: true, architectOnly: true, constraintsBound });
   }
   return { jobs, report };
 }
@@ -2886,68 +2821,6 @@ if (require.main === module) {
       console.log(`   cache/cs-n/device-pool-${spec.rig}.json sha256 ${sha256(poolText)} (pin it as networkFixture.devicePoolSha256)`);
       return;
     }
-    if (args.cmd === 'score-self-test') {
-      const { scoreSelfTest } = await import('./score-requirements');
-      const r = scoreSelfTest(path.resolve(args.experiment!));
-      console.log('| gen | served | view | coverage (registry-caused) | citations | clauses | lint | residue {{/🗑/author | failing | turn (flag ON) |\n|---|---|---|---|---|---|---|---|---|---|');
-      r.rows.forEach((x) => console.log(x));
-      console.log(`\nL-R5 report.md − Author text (program view delivered): ${r.reportDeltas.map((d) => `gen ${d.gen} ${d.delta >= 0 ? '+' : ''}${d.delta}`).join(' · ')} · max ${Math.max(...r.reportDeltas.map((d) => d.delta))}`);
-      if (r.mismatches.length) { console.log(`\n❌ ${r.mismatches.length} mismatch(es) against stage A:\n  ${r.mismatches.join('\n  ')}`); process.exit(1); }
-      console.log('\n✅ scorer reproduces stage A on all gens');
-      return;
-    }
-    if (args.cmd === 'score') {
-      const { scoreRun } = await import('./score-requirements');
-      const r = scoreRun(path.resolve(args.run!), path.resolve(args.experiment!));
-      console.log(r.md.join('\n'));
-      return;
-    }
-    if (args.cmd === 'z49-self-test') {
-      const { z49SelfTest } = await import('./score-z49');
-      const r = z49SelfTest(path.resolve(args.experiment!));
-      console.log('| case | mode | stanza blocks/parse | statements (effect:keys) | forbidden keys | G-STANZA | request-path rows (leg:form/tier) | G-ROW | G-NOWORSE inputs |\n|---|---|---|---|---|---|---|---|---|');
-      r.rows.forEach((x) => console.log(x));
-      if (r.mismatches.length) { console.log(`\n❌ ${r.mismatches.length} mismatch(es):\n  ${r.mismatches.join('\n  ')}`); process.exit(1); }
-      console.log('\n✅ Z49 scorer reads every case as pre-registered');
-      return;
-    }
-    if (args.cmd === 'z49-score') {
-      const { z49ScoreRun } = await import('./score-z49');
-      const runs = args.run!.split(',').map((r) => path.resolve(r));
-      const r = z49ScoreRun(runs, path.resolve(args.experiment!));
-      fs.writeFileSync(path.join(runs[0], 'z49-scores.json'), JSON.stringify(r, null, 2));
-      fs.writeFileSync(path.join(runs[0], 'z49-scores.md'), r.md.join('\n') + '\n');
-      console.log(r.md.join('\n'));
-      return;
-    }
-    if (args.cmd === 'g4-self-test') {
-      const { g4SelfTest } = await import('./score-g4');
-      const r = g4SelfTest(path.resolve(args.experiment!));
-      console.log('| case | item rows/viol. | restates/asks | enforcer-scope form:option | part hits | empty cites/no-change | premise | collateral | G-NOWORSE cov·cit·clauses·lint |\n|---|---|---|---|---|---|---|---|---|');
-      r.rows.forEach((x) => console.log(x));
-      if (r.mismatches.length) { console.log(`\n❌ ${r.mismatches.length} mismatch(es):\n  ${r.mismatches.join('\n  ')}`); process.exit(1); }
-      console.log('\n✅ g4 scorer reads every case as pre-registered');
-      return;
-    }
-    if (args.cmd === 'g4-score') {
-      const { g4ScoreRun } = await import('./score-g4');
-      const runs = args.run!.split(',').map((r) => path.resolve(r));
-      const r = g4ScoreRun(runs, path.resolve(args.experiment!));
-      fs.writeFileSync(path.join(runs[0], 'g4-scores.json'), JSON.stringify(r, null, 2));
-      fs.writeFileSync(path.join(runs[0], 'g4-scores.md'), r.md.join('\n') + '\n');
-      console.log(r.md.join('\n'));
-      return;
-    }
-    if (args.cmd === 'g4-noworse-dump') {
-      // P8: run in BOTH trees with the same --check-at; the two files must be identical.
-      const { g4NoWorseDump } = await import('./score-g4');
-      const at = process.argv[process.argv.indexOf('--check-at') + 1];
-      if (!process.argv.includes('--check-at') || !at || !args.out) throw new Error('usage: g4-noworse-dump --experiment <dir> --check-at <commit> --out <file>');
-      const r = g4NoWorseDump(path.resolve(args.experiment!), at);
-      fs.writeFileSync(path.resolve(args.out), JSON.stringify(r, null, 2) + '\n');
-      console.log(`✅ ${Object.keys(r).length} drafts → ${args.out}`);
-      return;
-    }
     if (args.cmd === 'edits-score') {
       // L-5 (Stage B G1, $0): the edit scorer over one or more runs; writes g1-scores.{json,md} beside the first run.
       const { scoreG1Run } = await import('./score-edits');
@@ -3104,7 +2977,7 @@ if (require.main === module) {
       return;
     }
     if (args.cmd === 'blind') {
-      const { blindCopies } = await import('./score-requirements');
+      const { blindCopies } = await import('./blind');
       console.log(`✅ ${blindCopies(path.resolve(args.run!), path.resolve(args.out!))} blind copies → ${args.out} (key: ${path.join(args.run!, 'blind-key.json')} — keep it from the reader)`);
       return;
     }

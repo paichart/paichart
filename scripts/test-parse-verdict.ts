@@ -18,7 +18,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseReviewerVerdict, locateTerminalVerdict, REVIEWER_ROLES, VERDICT_MARKER } from '../lib/agents/harness/parse-verdict';
+import { parseReviewerVerdict, locateTerminalVerdict, REVIEWER_ROLES, RETIRED_REVIEWER_ROLES, VERDICT_MARKER } from '../lib/agents/harness/parse-verdict';
+// Retired reviewer roles stay in REVIEWER_ROLES to classify stored rows but carry no guidance (2026-11-28).
+const LIVE_REVIEWER_ROLES = [...REVIEWER_ROLES].filter((r) => !RETIRED_REVIEWER_ROLES.has(r));
 import { computeEvidenceGrading, VERIFIED_TOKEN, ACCEPTED_TOKEN } from '../lib/agents/harness/evidence-grading';
 import { parseConfidenceScore } from '../lib/agents/harness/parse-confidence';
 import { ROLE_GUIDANCE_LIBRARY } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
@@ -77,8 +79,13 @@ test('Coupling: change_reviewer role guidance exists and defines the terminal bl
 // would have produced a silent null verdict on every review, with the harness seeing no reviewer
 // judgement at all rather than an error. Found by the documented-grep audit flagging that the
 // grammar now appears twice in the library, which is correct, and unpinned, which was not.
-test('Coupling: every REVIEWER_ROLE guidance carries ALL FOUR tokens the parser reads', () => {
-  for (const role of REVIEWER_ROLES) {
+test('RETIRED_REVIEWER_ROLES: requirements_reviewer stays in REVIEWER_ROLES (stored-row classification), has no guidance, and is the only retired role', () => {
+  expect([...RETIRED_REVIEWER_ROLES]).toEqual(['requirements_reviewer']);
+  for (const r of RETIRED_REVIEWER_ROLES) { expect(REVIEWER_ROLES.has(r)).toBe(true); expect(ROLE_GUIDANCE_LIBRARY[r]).toBe(undefined); }
+});
+
+test('Coupling: every LIVE REVIEWER_ROLE guidance carries ALL FOUR tokens the parser reads (RETIRED_REVIEWER_ROLES have none)', () => {
+  for (const role of LIVE_REVIEWER_ROLES) {
     const g = ROLE_GUIDANCE_LIBRARY[role];
     expect(typeof g).toBe('string');
     for (const token of [VERDICT_MARKER, 'APPROVED', 'NEEDS-REVISION', 'Blocking issues:', 'Confidence:']) {
@@ -103,7 +110,7 @@ test('Coupling: a well-formed block built from the guidance grammar parses', () 
   // B6 fold S20 (2026-10-02): from EVERY REVIEWER_ROLES member, not change_reviewer alone — three role-level copies of
   // the grammar exist (change_reviewer, requirements_reviewer, derivation_reviewer) and a drift in any one would make
   // that role's verdicts parse null silently.
-  for (const role of REVIEWER_ROLES) {
+  for (const role of LIVE_REVIEWER_ROLES) {
     expect(ROLE_GUIDANCE_LIBRARY[role].includes('## VERDICT: APPROVED | NEEDS-REVISION')).toBe(true);
   }
   expect(reviewerGuidance.includes('## VERDICT: APPROVED | NEEDS-REVISION')).toBe(true);

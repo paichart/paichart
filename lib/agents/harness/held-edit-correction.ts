@@ -17,7 +17,60 @@ import {
 } from './held-bytes/apply';
 import { parseHeldEdits, grammarLineNumbers, textLines, machineHeadingTitle, HELD_EDITS_HEADING, HELD_ROLLBACK_HEADING } from './held-bytes/edits';
 import { addUsage, buildLlmCallOptions, reflectionErrorFact, warnReflectionError, type ReflectionErrorFact } from './agentic-tool-loop';
-import { estimateRequirementsCorrectionTime, REQUIREMENTS_TURN_MAX_MS, type RequirementsTimeBudget } from './requirements-form-correction';
+import { RUNTIME_LIMITS } from '@/lib/validation/runtime-limits';
+
+/**
+ * The correction turn's time budget. MOVED VERBATIM 2026-11-28 from requirements-form-correction.ts (parcel A: the requirements
+ * Author's dormant code removed; cline_docs/reviews/author-sunset-2026-11-27/PARCEL-A-PLAN.md). This correction is its only user.
+ * ⚠️ `timeBudget` is a STORED fact on held Author rows (`toolLoop.editCorrection.timeBudget`): keep the object literal's key order
+ * (remainingMs, estimatedMs, estimatedOutputTokens, observedTps) and `boundMs` assigned after it — a reorder changes stored bytes.
+ * Pinned in test-held-variant.ts (the three arithmetic cases carried from the deleted suite).
+ */
+export interface CorrectionTimeBudget {
+  /** Watchdog time left at the decision point (ms; may be negative). */
+  remainingMs: number;
+  /** SAFETY + estimated generation time of a full re-emission at the observed (discounted) throughput. */
+  estimatedMs: number;
+  estimatedOutputTokens: number;
+  /** Output tok/s over the loop's wall clock (floor constant when unmeasurable), before the discount. */
+  observedTps: number;
+  /** The bound the estimate was compared against: min(remainingMs, the turn's own 600 s cap) (G5, 2026-10-10). */
+  boundMs?: number;
+}
+
+/**
+ * The R4 INSUFFICIENT_TIME pattern applied to a full-document re-emission. The re-emission must generate about as many
+ * tokens as the deliverable turn did: `estimatedOutputTokens = max(that turn's output tokens, ceil(chars / 3))` (the
+ * turn's own count includes adaptive thinking — conservative; chars/3 floors a turn with no usage). Throughput is the
+ * loop's output tokens over its WALL CLOCK (tool time included ⇒ ≤ the generation rate — conservative), floor constant
+ * when unmeasurable (no usage, or a loop under 10 s), discounted by TRUNCATION_RETRY_TPS_DISCOUNT; TRUNCATION_RETRY_SAFETY_MS covers TTFT + transmission.
+ */
+const MIN_MEASURE_MS = 10_000;
+/** The correction turn's own abort cap (the same 600 s the terraform turn and #90 use). */
+export const CORRECTION_TURN_MAX_MS = 600_000;
+
+export function estimateCorrectionTime(input: {
+  deadlineAt: number; now: number; loopStartedAt: number; draftChars: number;
+  lastTurnOutputTokens?: number | null; totalOutputTokens?: number | null;
+}): CorrectionTimeBudget {
+  const elapsedMs = input.now - input.loopStartedAt;
+  // A loop shorter than MIN_MEASURE_MS is not a throughput sample (a near-zero window yields an absurd rate that would
+  // wave any re-emission through): the floor constant is used instead.
+  const observedTps = elapsedMs >= MIN_MEASURE_MS && typeof input.totalOutputTokens === 'number' && input.totalOutputTokens > 0
+    ? input.totalOutputTokens / (elapsedMs / 1000)
+    : RUNTIME_LIMITS.OUTPUT_TOKENS_PER_SEC_FLOOR;
+  const estimatedOutputTokens = Math.max(
+    typeof input.lastTurnOutputTokens === 'number' && input.lastTurnOutputTokens > 0 ? input.lastTurnOutputTokens : 0,
+    Math.ceil(input.draftChars / 3),
+  );
+  const genMs = (estimatedOutputTokens / (observedTps * RUNTIME_LIMITS.TRUNCATION_RETRY_TPS_DISCOUNT)) * 1000;
+  return {
+    remainingMs: Math.round(input.deadlineAt - input.now),
+    estimatedMs: Math.round(RUNTIME_LIMITS.TRUNCATION_RETRY_SAFETY_MS + genMs),
+    estimatedOutputTokens,
+    observedTps: Math.round(observedTps * 10) / 10,
+  };
+}
 
 export const HELD_EDIT_CORRECTION_FLAG = 'HELD_EDIT_CORRECTION_ENABLED';
 export function isHeldEditCorrectionEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -35,7 +88,7 @@ export type EditCorrectionNotAdoptedReason = 'llm-error' | 'empty-response' | 'r
 export interface EditCorrectionFact {
   attempted: boolean;
   notAttemptedReason?: EditCorrectionNotAttemptedReason;
-  timeBudget?: RequirementsTimeBudget;
+  timeBudget?: CorrectionTimeBudget;
   adoptionRuleVersion?: number;
   adopted?: boolean;
   notAdoptedReason?: EditCorrectionNotAdoptedReason;
@@ -55,7 +108,7 @@ export function decideEditCorrection(input: {
   formCorrectionAttempted: boolean;
   budgetFlagged: boolean;
   enabled: boolean;
-  time: () => RequirementsTimeBudget;
+  time: () => CorrectionTimeBudget;
 }): EditCorrectionFact {
   const a = input.application;
   const platform = PACKAGE_PLATFORM_STATES.has(a.state) || (EDIT_REFUSAL_CLASS[a.state as EditRefusalName] === 'PLATFORM_STATE');
@@ -69,7 +122,7 @@ export function decideEditCorrection(input: {
   if (input.budgetFlagged) return { attempted: false, notAttemptedReason: 'budget-flagged' };
   if (!input.enabled) return { attempted: false, notAttemptedReason: 'flag-off' };
   const timeBudget = input.time();
-  const boundMs = Math.min(timeBudget.remainingMs, REQUIREMENTS_TURN_MAX_MS);
+  const boundMs = Math.min(timeBudget.remainingMs, CORRECTION_TURN_MAX_MS);
   timeBudget.boundMs = boundMs;
   if (timeBudget.estimatedMs > boundMs) return { attempted: false, notAttemptedReason: 'insufficient-time', timeBudget };
   return { attempted: true, timeBudget };
@@ -268,7 +321,7 @@ export async function runEditCorrectionTurn(
   return { text: corrected as string, currentResponse: response, after, outcome: { ...base, adopted: true, refusedAfter: after!.refusedTotal, ...usage } };
 }
 
-/** The turn's abort bound — the requirements budget (deadline + loop start), min(600 s, time left). */
-export function editCorrectionTime(input: Parameters<typeof estimateRequirementsCorrectionTime>[0]): RequirementsTimeBudget {
-  return estimateRequirementsCorrectionTime(input);
+/** The turn's abort bound — the correction time budget (deadline + loop start), min(600 s, time left). */
+export function editCorrectionTime(input: Parameters<typeof estimateCorrectionTime>[0]): CorrectionTimeBudget {
+  return estimateCorrectionTime(input);
 }

@@ -215,6 +215,102 @@ async function buildFixture(): Promise<Fixture> {
         `Should land in first PLANNING stage. Got: ${result.stageId}`);
     });
 
+    // ======================================================================
+    // TASK-CREATE-PHASENAME-IGNORED-ON-NEW-STAGE (2026-11-27). Prod repro
+    // 2026-11-26T08:55:34Z: phaseName = second phase + NEW stageName created the
+    // stage in the FIRST phase. The handler passes its PLANNING/first-phase pick as
+    // phaseId with phaseIsDefault: true — that is the exact repro call shape.
+    // ======================================================================
+    const stagePhase = async (id: string) =>
+      (await prisma.stage.findUnique({ where: { id }, select: { phaseId: true, name: true } }))!;
+
+    await test('REGRESSION (repro shape): default phaseId + phaseName=Review + NEW stageName → created IN Review', async () => {
+      const r = await resolveStageForTask({
+        povId: f.povId, phaseId: f.planningPhaseId, phaseIsDefault: true,
+        phaseName: 'review', stageName: 'Brand New Stage', title: 't',
+      });
+      assert(r.phaseId === f.reviewPhaseId, `must land in Review, got ${r.phaseId}`);
+      const st = await stagePhase(r.stageId);
+      assert(st.phaseId === f.reviewPhaseId && st.name === 'Brand New Stage', `stage must be created in Review, got ${JSON.stringify(st)}`);
+    });
+
+    await test('phaseName + stageName that exists ONLY in another phase (exact) → new stage in the named phase, not reused', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseName: 'Review', stageName: 'Planning Stage 1' });
+      assert(r.phaseId === f.reviewPhaseId, `got phase ${r.phaseId}`);
+      assert(r.stageId !== f.planningStage1Id, 'must not reuse the Planning-phase stage');
+    });
+
+    await test('phaseName + exact stageName in the named phase → reused', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseName: 'Review', stageName: 'review stage 2' });
+      assert(r.stageId === f.reviewStage2Id, `got ${r.stageId}`);
+    });
+
+    await test('phaseName + partial stageName matching stages in BOTH phases → the named phase\'s stage', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseName: 'Review', stageName: 'Stage 1' });
+      assert(r.stageId === f.reviewStage1Id, `expected Review Stage 1, got ${r.stageId}`);
+    });
+
+    await test('phaseName partial ("revie") → that phase (same lookup as stage.create)', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseName: 'revie', stageName: 'Partial Phase Stage' });
+      assert(r.phaseId === f.reviewPhaseId, `got ${r.phaseId}`);
+    });
+
+    await test('phaseName unknown → refused (no silent relocation)', async () => {
+      let msg = '';
+      try { await resolveStageForTask({ povId: f.povId, phaseName: 'No Such Phase', stageName: 'X' }); }
+      catch (e) { msg = e instanceof Error ? e.message : String(e); }
+      assert(msg.includes('No Such Phase') && msg.includes('not found'), `must throw naming the phase, got: ${msg || 'no throw'}`);
+    });
+
+    await test('phaseName only (no stageName) → first stage of the named phase', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.planningPhaseId, phaseIsDefault: true, phaseName: 'Review' });
+      assert(r.stageId === f.reviewStage1Id, `got ${r.stageId}`);
+    });
+
+    await test('phaseName of an EMPTY phase + new stageName → created in that phase', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseName: 'Empty', stageName: 'First Of Empty' });
+      assert(r.phaseId === f.emptyPhaseId, `got ${r.phaseId}`);
+    });
+
+    await test('caller phaseId + stageName existing ONLY in another phase (exact) → new stage in the supplied phase', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.reviewPhaseId, stageName: 'Planning Stage 1' });
+      assert(r.phaseId === f.reviewPhaseId && r.stageId !== f.planningStage1Id, `got ${JSON.stringify(r)}`);
+    });
+
+    await test('caller phaseId + partial stageName → match inside the supplied phase only', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.reviewPhaseId, stageName: 'Stage 1' });
+      assert(r.stageId === f.reviewStage1Id, `got ${r.stageId}`);
+    });
+
+    await test('caller phaseId + NEW stageName → created in the supplied phase', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.reviewPhaseId, stageName: 'Another New One' });
+      const st = await stagePhase(r.stageId);
+      assert(st.phaseId === f.reviewPhaseId, `got ${JSON.stringify(st)}`);
+    });
+
+    await test('caller phaseId and phaseName that disagree → refused', async () => {
+      let msg = '';
+      try { await resolveStageForTask({ povId: f.povId, phaseId: f.reviewPhaseId, phaseName: 'Planning', stageName: 'X' }); }
+      catch (e) { msg = e instanceof Error ? e.message : String(e); }
+      assert(msg.includes('Refusing to guess'), `must throw, got: ${msg || 'no throw'}`);
+    });
+
+    await test('UNCHANGED: no caller phase (default phaseId) + exact stageName in another phase → POV-wide auto-detect', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.planningPhaseId, phaseIsDefault: true, stageName: 'Review Stage 2' });
+      assert(r.stageId === f.reviewStage2Id, `got ${r.stageId}`);
+    });
+
+    await test('UNCHANGED: no caller phase + partial stageName → POV-wide partial match', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.planningPhaseId, phaseIsDefault: true, stageName: 'Stage 2' });
+      assert(r.stageId === f.reviewStage2Id, `got ${r.stageId}`);
+    });
+
+    await test('UNCHANGED: no caller phase + NEW stageName → created in the default (PLANNING) phase', async () => {
+      const r = await resolveStageForTask({ povId: f.povId, phaseId: f.planningPhaseId, phaseIsDefault: true, stageName: 'Zz Unique Default' });
+      const st = await stagePhase(r.stageId);
+      assert(st.phaseId === f.planningPhaseId, `got ${JSON.stringify(st)}`);
+    });
+
   } finally {
     if (fix) {
       try { await fix.cleanup(); } catch (e) { console.warn('Cleanup failed:', e); }

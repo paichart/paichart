@@ -37,31 +37,18 @@
  *   W1     a labelled reachability line travels the whole lab chain offline: shipping verdict builder → leg reviewerWarnings
  *          net through replay-prisma (registered) → appendReviewerWarningsSection (no label prefix) → reachChainPass;
  *          the hygiene measures fire on a negated label and on a label under `Blocking issues:` (both directions).
- *   R1-R5  requirements_author nodes (L-R1..L-R5, 2026-10-09, inputs/2026-10-09-req-author-loop):
- *          R1 the reviewer is paired by the SHIPPING REVIEWER_ROLES set (N9 → its requirements_reviewer), and a node
- *             that names a different reviewer than the cached snapshot's fails loud instead of reusing it;
- *          R2 a dry run on N9: every control ✓, the role-excluded leaf nets read n/a (not a mismatch), the in-run
- *             requirements form check computes with the owner map, and the three arms' rendered prompts are identical;
- *          R3 the 2b correction flag is PER ARM: with REQUIREMENTS_FORM_CORRECTION_ENABLED=true in the env, the OFF arm
- *             stamps flag-off with no correction call, the ON arm makes the tool-less correction call (fake model) with
- *             the SHIPPING builder's message for that draft (N7; was N9 + the stage-A file until group 3a, 2026-10-12),
- *             and an arm lever set together with the env flag in `flags` is refused;
- *          R4 the scorer (shipping TS port) reproduces stage A's table on all 9 persisted trial drafts, plus each
- *             `movedBy` entry (a shipped code change, by commit) that is in this tree's history;
- *          R5 the L-R5 size allowance: a draft passing the in-run size check by < 500 (planted from gen 5 since group 3a)
- *             is not counted publishable, gen 5 as written is, and the
- *             committed report.md adds +0 on approved gens (the "NOT RELEASED" banner only on refused ones).
- *   GR1-GR4 group 4 lab (2026-10-12, inputs/2026-10-12-g4-registry): GR1 an edit op may name a subset of its spec's
- *          targets (the Reviewer brief paraphrases item 21); GR2 item 22 reaches LA's three inputs once each and no other
- *          node; GR3 the g4 scorer self-test (P9) — or a loud refusal in a tree without G's classifier; GR4 nByVariant.
- *   Z1-Z5  Z49 lab gate levers (Z5: HCL exemplar parse, L10 measure fault) (2026-10-10, inputs/2026-10-10-z49-request-path):
- *          Z1 node `inputEdits` (L-Z1) edit a DEEP COPY of the snapshot — leg/Author/Reviewer descriptions each exactly once —
- *             and leave the cached snapshot file byte-unchanged; an unknown target or a non-unique anchor fails loud;
- *          Z2 variant `requirementsCheckAt` (L-Z2) installs the in-run check data of a commit on the live module (the stamp's
- *             registrySha256 follows it) and `installCheckDataAt(null)` restores HEAD's;
- *          Z3 the Z49 scorer reads the persisted run-2 draft as the Z49 failure and every planted control as pre-registered;
- *          Z4 protocol-history v2 renders a protocol's embedded seed-data file AT the commit (requirements-authoring 1.8.0 at
- *             452dfe15 == the production row pinned 2026-10-09; v1 rendered today's skeleton at every commit).
+ *   R1     requirements_author nodes (L-R1, 2026-10-09, inputs/2026-10-09-req-author-loop): the reviewer is paired by the
+ *          SHIPPING REVIEWER_ROLES set (N9 → its requirements_reviewer, a stored row), and a node that names a different
+ *          reviewer than the cached snapshot's fails loud instead of reusing it. (R2-R5 — the in-run requirements check, its
+ *          correction turn and the requirements scorer — were removed 2026-11-28 with the retired Author, parcel A.)
+ *   GR1, GR2, GR4 group 4 lab (2026-10-12, inputs/2026-10-12-g4-registry): GR1 an edit op may name a subset of its spec's
+ *          targets; GR2 item 22 reaches LA's three inputs once each and no other node; GR4 nByVariant. (GR3, the g4 scorer,
+ *          removed 2026-11-28.)
+ *   Z1, Z4 (2026-10-10, inputs/2026-10-10-z49-request-path): Z1 node `inputEdits` (L-Z1) edit a DEEP COPY of the snapshot —
+ *          leg/Author/Reviewer descriptions each exactly once — and leave the cached snapshot file byte-unchanged; an unknown
+ *          target or a non-unique anchor fails loud; Z4 protocol-history v2 renders a protocol's embedded seed-data file AT the
+ *          commit (requirements-authoring 1.8.0 at 452dfe15 == the production row pinned 2026-10-09). (Z2, Z3, Z5 removed
+ *          2026-11-28 with the requirements check data and the Z49 scorer.)
  *   RT1-RT3 RECORDED TOOLS + harvester nodes (2026-10-13, inputs/2026-10-13-obs-quote-consumer):
  *          RT1 a scripted model re-issuing each harvester node's PRODUCTION calls is served the stored results byte for byte
  *              through the shipping loop: every call served, served bytes == stored, every file-tool call's R9 and LLM-cap
@@ -90,14 +77,8 @@ import { protocolTextAtCommit } from './leg-replay-lab/protocol-history';
 import { applyEdits, groupOf, computeMeasures, withModel, plantFor, shippingReviewerVerdict, reviewerWarningMeasures, reachChainPass } from './leg-replay-lab/lab';
 import { runLegSynthesizeNets } from './leg-replay-lab/nets';
 import { snapshotSql } from './leg-replay-lab/snapshot';
-import { scoreSelfTest, scoreText, nodeInputs, readOwnerMap, SIZE_ALLOWANCE_CHARS } from './leg-replay-lab/score-requirements';
 import { snapshotWithInputEdits } from './leg-replay-lab/input-edits';
-import { installCheckDataAt } from './leg-replay-lab/check-at';
-import { z49SelfTest, parseStanza } from './leg-replay-lab/score-z49';
-import { g4SelfTest, requireG4Classifier } from './leg-replay-lab/score-g4';
 import { snapshotPath } from './leg-replay-lab/snapshot';
-import { computeRequirementsFormCheckStamp, buildRequirementsCorrectionPrompt } from '../lib/agents/harness/requirements-form-correction';
-import { analyzeRequirementsForm } from '../lib/agents/harness/requirements-form-check';
 import { appendReviewerWarningsSection } from '../lib/services/report-warnings-section';
 import * as shippingVerdict from '../lib/agents/harness/parse-verdict';
 import { createRecordedToolServer, recordedToolsReport, storedCallsOf, type StoredCall } from './leg-replay-lab/recorded-tools';
@@ -108,7 +89,6 @@ import { objectiveOfRecordSource, createObjectiveToolServer } from './leg-replay
 
 const LAB = path.join(__dirname, 'leg-replay-lab');
 /** origin/main before Z49 (0bcbfd7f added the request-path registry row): the in-run check data of the 2026-10-09 drafts. */
-const PRE_Z49 = '452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26';
 const EXP = path.join(LAB, 'inputs', '2026-10-07-gaps-1-3');
 let pass = 0; let fail = 0;
 async function test(name: string, fn: () => Promise<void> | void) {
@@ -459,113 +439,8 @@ const commitText = (name: string, commit: string): ProtocolText => {
     assert(threw, 'a node naming a different reviewer than the cached snapshot did not fail loud');
   });
 
-  const reqTmp = (name: string, edit: (e: any) => void) => {
-    const tmp = path.join(out, name);
-    fs.cpSync(REQ, tmp, { recursive: true });
-    const e = JSON.parse(fs.readFileSync(path.join(tmp, 'experiment.json'), 'utf8'));
-    edit(e);
-    fs.writeFileSync(path.join(tmp, 'experiment.json'), JSON.stringify(e, null, 2));
-    return tmp;
-  };
-
-  await test('R2 requirements dry run on N9: controls ✓ (role-excluded nets n/a), form check computes with the owner map, arms byte-identical', () => {
-    const tmp = reqTmp('exp-req', (e) => { e.nodes = e.nodes.filter((nd: any) => nd.id === 'N9'); });
-    const dir = path.join(out, 'req-dry');
-    const log = runLab(['run', '--experiment', tmp, '--out', dir]);
-    assert(/markerPresence n\/a ✓ rollbackContainment n\/a ✓/.test(log), 'role-excluded leaf nets not reported n/a');
-    const c = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).nodes.N9.controls;
-    assert(c.chainPatchIdentity && c.shippingParserReproducesPersistedVerdict && c.legReviewerWarningsComputes, `a control failed ${JSON.stringify(c)}`);
-    assert(JSON.stringify(c.leafNetsReproducePersisted.notApplicable) === '["markerPresence","rollbackContainment"]', `n/a list ${JSON.stringify(c.leafNetsReproducePersisted.notApplicable)}`);
-    const rq = c.requirementsFormCheckComputes;
-    // 51,725 → 48,322 by group 3a (ad77a501, 2026-10-12): the program view drops the owner section's not-applicable rows
-    // (that commit's message states this exact move). A view measure, untouched by check data; same in every tree after it.
-    assert(rq?.ok && rq.ownerRowItemMap === 'present' && rq.itemMapSource === 'owner-map' && rq.persistedDraft.view === 48322, `form check control ${JSON.stringify(rq)}`);
-    for (const f of ['author.system.md', 'author.user.md', 'reviewer.system.md']) {
-      const rd = (v: string) => fs.readFileSync(path.join(dir, 'N9', v, f), 'utf8');
-      assert(rd('sonnetBase') === rd('opusBase') && rd('opusBase') === rd('opusLoop'), `${f} differs between arms (they may differ only in model and flag)`);
-    }
-    assert(!fs.readFileSync(path.join(dir, 'N9', 'opusLoop', 'author.user.md'), 'utf8').includes('requirementsRowItemMap'), 'the owner map reached a prompt');
-  });
-
-  await test('R3 the 2b correction flag is per arm, independent of the env; an arm lever plus the env flag is refused', () => {
-    // L-Z2: the trial drafts are 2026-10-09 drafts; check them under that day's check data (pre-Z49 registry).
-    // N9 → N7 (2026-10-12, group 4 lab P0): group 3a (ad77a501) brought N9's view under the limit, so at production code
-    // N9 fails no trigger check and the ON arm has nothing to correct — the test lost its subject. N7 (gen 7, 53,639)
-    // is over the size limit in every tree since stage A. Its failing set grows by `coverage` under group 4 (5230c131:
-    // restatements are Author-actionable), so the assertion is that `size` is among them, not the exact set.
-    // The stage-A message file was rendered by 2026-10-09 code; the shipping message has since moved by construction
-    // (3a's numbers, G's restatement item). The lab is now checked against the SHIPPING builder on the same draft and
-    // inputs: what it must deliver is what production would send.
-    // R1 (2026-10-12): under the Program Architect's 64,000 limit N7 (53,639) FITS — no trial draft is over it — so its
-    // failing set is `coverage` alone (5230c131). The subject here is the per-arm flag, not the size check: the assertion
-    // is that the ON arm attempts on a failing trigger check, whichever it is.
-    const tmp = reqTmp('exp-req-r3', (e) => { e.nodes = e.nodes.filter((nd: any) => nd.id === 'N7'); for (const v of Object.values<any>(e.variants)) v.requirementsCheckAt = PRE_Z49; });
-    const fdir = path.join(out, 'req-fake');
-    execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', tmp, '--out', fdir,
-      '--fake-llm', 'persisted', '--n', '1', '--variants', 'opusBase,opusLoop'],
-      { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', REQUIREMENTS_FORM_CORRECTION_ENABLED: 'true' }, maxBuffer: 64 * 1024 * 1024 });
-    const smp = (v: string) => JSON.parse(fs.readFileSync(path.join(fdir, 'N7', v, 'sample-01', 'sample.json'), 'utf8'));
-    const off = smp('opusBase'); const on = smp('opusLoop');
-    assert(off.author.requirementsFormCorrectionEnabledSource === 'arm:off' && off.author.requirementsFormCheck.correction.notAttemptedReason === 'flag-off', `OFF arm: ${JSON.stringify(off.author.requirementsFormCheck?.correction)}`);
-    assert(!off.calls.some((x: any) => x.purpose === 'requirements-form-correction'), 'the OFF arm made a correction call (the env leaked into the arm)');
-    const corr = on.author.requirementsFormCheck.correction;
-    assert(on.author.requirementsFormCorrectionEnabledSource === 'arm:on' && corr.attempted === true && corr.failingChecks.length > 0, `ON arm: ${JSON.stringify(corr)}`);
-    assert(on.calls.filter((x: any) => x.role === 'author').map((x: any) => x.purpose).join(',') === 'loop,requirements-form-correction', `ON arm calls: ${on.calls.map((x: any) => x.purpose)}`);
-    assert(corr.adopted === false && corr.notAdoptedReason === 'no-improvement', 'the fake re-emission (identical text) must be rejected as no-improvement');
-    assert(corr.timeBudget.remainingMs > 1_000_000, `the lab watchdog is not production's 1080 s: ${corr.timeBudget.remainingMs}`);
-    const sd = path.join(fdir, 'N7', 'opusLoop', 'sample-01');
-    const n7 = loadSnapshot('cmv0564wz008kyxlscta8h2uw');
-    const n7Text = parsedResult(n7.author)!.finalResponse;
-    const n7In = nodeInputs(n7, readOwnerMap(REQ, 'owner-maps/log-archive-namespace-write-2026-10-09.answers.json'));
-    installCheckDataAt(PRE_Z49);
-    let shipping: string;
-    try {
-      shipping = buildRequirementsCorrectionPrompt(computeRequirementsFormCheckStamp({ text: n7Text, stopReason: 'end_turn', textSource: 'loop', inputs: n7In }) as any,
-        analyzeRequirementsForm({ draft: n7Text, objective: n7In.objective, ownerRowItemMapParsed: n7In.ownerMap } as any));
-    } finally { installCheckDataAt(null); }
-    assert(fs.readFileSync(path.join(sd, 'correction-message.md'), 'utf8') === shipping, 'the lab correction message differs from the shipping builder on the same draft and inputs');
-    assert(fs.existsSync(path.join(sd, 'author.pre-correction.md')) && fs.existsSync(path.join(sd, 'author.correction-raw.md')), 'pre-correction / raw re-emission not saved');
-    const bad = reqTmp('exp-req-r3-bad', (e) => { e.nodes = e.nodes.filter((nd: any) => nd.id === 'N9'); e.flags.REQUIREMENTS_FORM_CORRECTION_ENABLED = 'true'; });
-    let refused = false;
-    try {
-      execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', bad, '--out', path.join(out, 'req-bad')],
-        { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '' }, stdio: 'pipe', maxBuffer: 64 * 1024 * 1024 });
-    } catch (e) { refused = /one lever, two sources/.test(String((e as any).stderr ?? e)); }
-    assert(refused, 'an arm lever together with the env flag in `flags` was not refused');
-  });
-
-  await test('R4 the requirements scorer reproduces stage A on all 9 persisted trial drafts', () => {
-    const r = scoreSelfTest(REQ);
-    assert(r.rows.length === 9, `${r.rows.length} gens scored`);
-    assert(r.mismatches.length === 0, r.mismatches.join('; '));
-  });
-
-  await test('R5 L-R5 allowance: in-run size pass by < 500 is not publishable; report.md adds +0 on approved gens', () => {
-    const r = scoreSelfTest(REQ);
-    const approvedGens = [3, 5, 7, 9];
-    for (const d of r.reportDeltas) {
-      if (approvedGens.includes(d.gen)) assert(d.delta === 0, `gen ${d.gen} (approved) report.md delta ${d.delta}`);
-      assert(d.delta >= 0 && d.delta < SIZE_ALLOWANCE_CHARS, `gen ${d.gen} report.md delta ${d.delta} not covered by the ${SIZE_ALLOWANCE_CHARS} allowance`);
-    }
-    // Gen 5 was the natural near-limit case (49,918). Group 3a (ad77a501) took its view to 45,773, so it now tests the
-    // OTHER direction (well inside: counted publishable), and the near-limit case is PLANTED (2026-10-12, group 4 lab P0):
-    // gen 5 padded inside *Program scope* (a section the program view keeps) to land 250 under the limit.
-    const snap = loadSnapshot('cmv039qyi00n0yxlrujybxow1');
-    const g5Text = parsedResult(snap.author)!.finalResponse;
-    const g5In = nodeInputs(snap, readOwnerMap(REQ, 'owner-maps/log-archive-namespace-write-2026-10-09.answers.json'));
-    installCheckDataAt(PRE_Z49);
-    let g5: ReturnType<typeof scoreText>; let near: ReturnType<typeof scoreText>;
-    try {
-      g5 = scoreText(g5Text, g5In);
-      const anchor = '## Program scope\n';
-      assert(g5Text.split(anchor).length === 2, 'gen 5 has no unique Program scope heading to pad under');
-      const pad = (n: number) => g5Text.replace(anchor, anchor + 'x'.repeat(n) + '\n\n');
-      const probe = scoreText(pad(1000), g5In);
-      near = scoreText(pad(1000 + (g5.limit! - 250) - probe.view!), g5In);
-    } finally { installCheckDataAt(null); }
-    assert(g5.view === 45773 && g5.failing.length === 0 && g5.mechanicalPass && g5.sizeWithAllowance, `gen 5 (inside): ${JSON.stringify({ view: g5.view, failing: g5.failing, size: g5.sizeWithAllowance })}`);
-    assert(near.view === g5.limit! - 250 && !near.failing.includes('size') && !near.sizeWithAllowance, `planted near-limit: ${JSON.stringify({ view: near.view, limit: near.limit, failing: near.failing, size: near.sizeWithAllowance })}`);
-  });
+  // R2-R5 (the in-run requirements check, its correction turn and the requirements scorer) were REMOVED 2026-11-28 with the
+  // retired requirements Author (parcel A). R1 stays: the reviewer pairing reads the shipping REVIEWER_ROLES on stored rows.
 
   const Z49 = path.join(LAB, 'inputs', '2026-10-10-z49-request-path');
   const A21 = 'cmv0hmi8q006wyxmcyein2a3g';
@@ -588,38 +463,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
     assert(bad({ id: 'm', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: 'NO-SUCH-ANCHOR', new: 'y' }] }), 'a missing anchor was accepted');
   });
 
-  await test('Z2 requirementsCheckAt installs a commit\'s check data on the live module and restores HEAD\'s', () => {
-    const text = parsedResult(loadSnapshot(A21).author)!.finalResponse;
-    const stamp = () => computeRequirementsFormCheckStamp({ text, stopReason: 'end_turn', textSource: 'loop', inputs: { objective: 'x', objectiveResolved: true, harnessTaskId: null, ownerMap: null, ownerMapState: 'absent' } as any }) as any;
-    const head = stamp();
-    const pre = installCheckDataAt('452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26');
-    let old: any;
-    try { old = stamp(); } finally { installCheckDataAt(null); }
-    const back = stamp();
-    assert(pre.registrySha256.startsWith('7a896d1ddc4c') && old.registrySha256 === pre.registrySha256, `pre-Z49 stamp sha ${old?.registrySha256}`);
-    assert(head.registrySha256 === back.registrySha256 && head.registrySha256 !== old.registrySha256, 'HEAD data not restored');
-    const rp = (f: any) => f.coverage.errors.filter((e: any) => e.key === 'request-path').length;
-    assert(rp(head) === 2 && rp(old) === 0, `request-path findings HEAD ${rp(head)} / pre-Z49 ${rp(old)} (expected 2 / 0)`);
-  });
-
-  await test('Z3 the Z49 scorer reads the persisted Z49 failure and every planted control as pre-registered', () => {
-    const r = z49SelfTest(Z49);
-    assert(r.rows.length >= 9, `${r.rows.length} cases`);
-    assert(r.mismatches.length === 0, r.mismatches.join('; '));
-  });
-
-  await test('Z5 the Z49 scorer reads an HCL jsonencode exemplar (L10 measure fault: A21/z49/sample-03 read parse:none)', () => {
-    const hcl = ['- Exemplar:', '', '```hcl', 'resource "aws_s3_bucket_policy" "<NAME>" {', '  policy = jsonencode({',
-      '    Statement = [', '      {', '        Sid       = "<ALLOW_SID>"', '        Effect    = "Allow"', '        Action    = "s3:GetObject"',
-      '        Condition = {', '          IpAddress = { "aws:VpcSourceIp" = [<HOST LIST>] }', '        }', '      },', '      {',
-      '        Sid       = "<DENY_SID>"', '        Effect    = "Deny"', '        Condition = {',
-      '          NotIpAddress = { "aws:VpcSourceIp" = [<HOST LIST>] }', '        }', '      }', '    ]', '  })', '}', '```', ''].join('\n');
-    const st = parseStanza(hcl);
-    assert(st.parse === 'hcl' && st.blocks === 1, JSON.stringify(st));
-    assert(JSON.stringify(st.statements) === JSON.stringify([{ effect: 'Allow', keys: ['aws:VpcSourceIp'] }, { effect: 'Deny', keys: ['aws:VpcSourceIp'] }]), JSON.stringify(st.statements));
-    const json = '```json\n{ "Effect": "Allow", "Condition": { "IpAddress": { "aws:SourceIp": ["x"] } } }\n```';
-    assert(parseStanza(json).parse === 'json' && parseStanza(json).statements[0].keys[0] === 'aws:SourceIp', 'JSON path unchanged');
-  });
+  // Z2 (requirementsCheckAt), Z3 and Z5 (the Z49 scorer) were REMOVED 2026-11-28 with the retired requirements Author (parcel A).
 
   await test('Z4 protocol-history renders embedded seed-data AT the commit (1.8.0 at 452dfe15 == the pinned production row)', () => {
     const pre = protocolTextAtCommit('requirements-authoring-protocol', '452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26');
@@ -657,19 +501,15 @@ const commitText = (name: string, commit: string): ProtocolText => {
     }
   });
 
-  await test('GR3 the g4 scorer reads every persisted and planted case as pre-registered — or, outside G\'s tree, refuses loudly', () => {
-    let hasG = true;
-    try { requireG4Classifier(); } catch (e) { hasG = false; assert(/needs the group 4 coverage classifier/.test((e as Error).message), (e as Error).message); }
-    if (!hasG) return;   // the base tree (release code): scoring there would read every G-ITEM proxy 0 by construction
-    if (!fs.existsSync(path.join(LAB, 'cache', 'g4-sealed', 'expect.json'))) throw new Error('sealed file absent — P9/P11 cannot run in this checkout');
-    const r = g4SelfTest(G4);
-    assert(r.rows.length >= 25 && r.mismatches.length === 0, r.mismatches.join('; '));
-  });
+  // GR3 (the group 4 scorer) was REMOVED 2026-11-28 with the retired requirements Author (parcel A).
 
   await test('GR4 nByVariant: a node runs n per variant (base TZ 1 beside g4 TZ 3) in the dry-run plan', () => {
     const tmp = path.join(out, 'g4-n'); fs.cpSync(G4, tmp, { recursive: true });
     const e = JSON.parse(fs.readFileSync(path.join(tmp, 'experiment.json'), 'utf8'));
-    e.nodes = e.nodes.filter((x: any) => x.id === 'TZ'); e.variants.base.requirementsCheckAt = null; e.variants.g4.requirementsCheckAt = null;
+    e.nodes = e.nodes.filter((x: any) => x.id === 'TZ');
+    // The requirements levers were retired 2026-11-28 (parcel A); prepare refuses an experiment that still sets them.
+    for (const v of Object.values<any>(e.variants)) { delete v.requirementsCheckAt; delete v.requirementsFormCorrection; }
+    for (const nd of e.nodes) delete nd.ownerRowItemMap;
     fs.writeFileSync(path.join(tmp, 'experiment.json'), JSON.stringify(e, null, 2));
     const log = String(runLab(['run', '--experiment', tmp, '--out', path.join(out, 'g4-n-dry')]));
     assert(/TZ\s+base\s+.* 1× ≈/.test(log) && /TZ\s+g4\s+.* 3× ≈/.test(log), `estimate rows: ${log.split('\n').filter((l) => /^\s+TZ\s/.test(l)).join(' | ')}`);
@@ -2179,7 +2019,11 @@ const commitText = (name: string, commit: string): ProtocolText => {
   });
 
   await test('OR3 through the SHIPPING loop under --fake-llm persisted: both requirements golden cells replay their stored calls, the fetch is served the stored bytes, every stored verdict reproduces; RED: unserve ⇒ 0 served', () => {
-    const REQG = path.join(LAB, 'inputs', '2026-11-09-req-golden-cases');
+    // The experiment's ownerRowItemMap fed the in-run requirements check, retired 2026-11-28 (parcel A); prepare refuses it,
+    // so this test runs a copy without it (the objective-of-record tier never read it).
+    const REQG = path.join(out, 'req-golden-cases-copy');
+    fs.cpSync(path.join(LAB, 'inputs', '2026-11-09-req-golden-cases'), REQG, { recursive: true });
+    { const e = JSON.parse(fs.readFileSync(path.join(REQG, 'experiment.json'), 'utf8')); for (const nd of e.nodes) delete nd.ownerRowItemMap; fs.writeFileSync(path.join(REQG, 'experiment.json'), JSON.stringify(e, null, 2)); }
     const read = (dir: string) => ['REQ-A-OBS-SENDERS', 'REQ-B-LOGARCH-F1'].map((id) => ({ id, m: JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).nodes[id], s: JSON.parse(fs.readFileSync(path.join(dir, id, 'gr', 'sample-01', 'sample.json'), 'utf8')) }));
     const dir = path.join(out, 'or-fake');
     runLab(['run', '--experiment', REQG, '--out', dir, '--fake-llm', 'persisted', '--n', '1']);

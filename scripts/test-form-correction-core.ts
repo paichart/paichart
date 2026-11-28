@@ -22,8 +22,8 @@
  * Plan: cline_docs/reviews/mechanical-reflection-trigger-2026-10-07/PLAN.md §4, §6, §8. Report: BUILD-REPORT-B.md.
  */
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://t:t@localhost:5432/t';
-// 2b (2026-10-09): the core now READS the DB for a requirements_author execution (the owning harness). The fake
-// credentials make lib/prisma.ts's eager $connect exit(1) asynchronously — a race the longer run can lose. Skip it.
+// The core READS the DB on every non-PIPELINE task (resolveOwningLegProtocol; until 2026-11-28 also the requirements_author's
+// owning harness). The fake credentials make lib/prisma.ts's eager $connect exit(1) asynchronously — a race the longer run can lose. Skip it.
 process.env.PAICHART_SKIP_DB_CONNECT = process.env.PAICHART_SKIP_DB_CONNECT || 'true';
 
 import * as fs from 'fs';

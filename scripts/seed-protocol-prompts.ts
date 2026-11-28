@@ -3763,7 +3763,8 @@ The teardown delete is step (1) of the order above — on approval and on escala
 // throws NAMED_PROTOCOL_NOT_FOUND (named) instead of running. The body is never injected; it never moves again.
 // Last live text: version 1.11.0, 52,647 characters, sha256 50a548c3c2d7a18eedc049e07104febe3bbffbfd19d42d6621efb9b1fcc9a979
 // (scripts/fixtures/protocol-golden.json before the retirement). The skeleton it embedded is frozen as a test fixture at
-// scripts/fixtures/requirements-skeleton-1.11.0.tmpl. Record: cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md.
+// scripts/fixtures/requirements-skeleton-1.11.0.tmpl until parcel A (2026-11-28) deleted it with its last readers; it is in git
+// history at 1db2cc499. Record: cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md.
 const REQUIREMENTS_AUTHORING_TOMBSTONE = `# requirements-authoring-protocol — RETIRED
 
 RETIRED 2026-11. This row is DEPRECATED and is never injected: a task stamped with it hard-fails PROTOCOL_ROW_NOT_ACTIVE, and a template bound to it throws NAMED_PROTOCOL_NOT_FOUND.

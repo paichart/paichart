@@ -8,8 +8,6 @@
  *   timeout controller → runAgenticToolLoop → finalizeTextForStopReason → content-validation guard
  *   → computeFormCheckFact (config_change_author only; 2026-10-07)
  *   → runFormCorrection (Step B: flag on AND every hit an undercount; ONE tool-less pass)
- *   → runRequirementsFormStep (requirements_author only; 2b 2026-10-09: fact always, ONE correction turn behind
- *     REQUIREMENTS_FORM_CORRECTION_ENABLED + the R4-style time budget)
  *   → parseConfidenceScore/applyConfidenceCap → runDiagnosticRetry → tokensUsed
  *   → assessExecutionQuality → buildExecutionResultJson → computeSelfSupersession
  *   → persistTerminalSuccess → onExecutionCompleted
@@ -75,11 +73,6 @@ import { computeFormCheckFact, isFormCheckEligible } from '@/lib/agents/harness/
 import type { FormCheckFact } from '@/lib/agents/harness/package-form-check';
 import { runFormCorrection, isFormCorrectionEnabled } from '@/lib/agents/harness/form-correction';
 import type { FormCorrectionObservers } from '@/lib/agents/harness/form-correction';
-import { isRequirementsFormCheckEligible } from '@/lib/agents/harness/requirements-form-check';
-import {
-  runRequirementsFormStep, recountRequirementsStamp, resolveRequirementsFormInputs, isRequirementsFormCorrectionEnabled,
-} from '@/lib/agents/harness/requirements-form-correction';
-import type { RequirementsFormCheckStamp, RequirementsFormCorrectionObservers, RequirementsFormInputs } from '@/lib/agents/harness/requirements-form-correction';
 import { runAgenticToolLoop } from '@/lib/agents/harness/agentic-tool-loop';
 import type { AccumulatedUsage, AgenticLoopObservers, AgenticLoopInput } from '@/lib/agents/harness/agentic-tool-loop';
 import { parseConfidenceScore, applyConfidenceCap, CONFIDENCE_CAP_CEILING } from '@/lib/agents/harness/parse-confidence';
@@ -137,8 +130,6 @@ export interface ExecutionCoreObservers {
   loop?: AgenticLoopObservers;
   /** Forwarded to runFormCorrection (Step B; stream wires 2 SSE emissions; engine passes none). */
   formCorrection?: FormCorrectionObservers;
-  /** Forwarded to runRequirementsFormStep (2b; no adapter wires it yet — the engine and stream pass none). */
-  requirementsFormCorrection?: RequirementsFormCorrectionObservers;
   /** Forwarded to runDiagnosticRetry (stream wires 2 SSE emissions; engine passes none). */
   diagnosticRetry?: Parameters<typeof runDiagnosticRetry>[2];
   /**
@@ -172,7 +163,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // The abort TIMER is core-owned and spans the #89 correction turn too (converged to the stream
   // route's safer placement; the engine formerly cleared it in a finally before #89).
   const executionAbort = new AbortController();
-  // 2b (2026-10-09): the loop's start — the requirements correction's throughput window (output tokens / wall clock).
+  // The loop's start — the held-edit correction's throughput window (output tokens / wall clock).
   const loopStartedAt = Date.now();
   // The watchdog's OWN deadline, computed on the line beside the timer it describes (register E1,
   // 2026-09-25) so a refactor cannot split them. The loop's R4 retry sizes its raise against it.
@@ -402,53 +393,11 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
         'form correction: outcome stamped on toolLoop.formCheck');
     }
 
-    // REQUIREMENTS FORM CHECK + CORRECTION (2b, 2026-10-09 — requirements-author retrospective, Steve "2b first").
-    // `requirements_author` by EXACT role, non-PIPELINE; every other role reads nothing and its result.json is
-    // byte-identical. The fact is stamped on EVERY eligible execution (shadow mode: with the flag OFF there is no
-    // behaviour change). Inputs: the owning harness's description (the objective) + its metadata.requirementsRowItemMap
-    // — ONE read, eligible role only, never fatal (a failure is a named `inputs.objectiveUnresolvedReason`). The turn
-    // runs only when the step's decision says `attempted` (failing trigger check, no #89, no budget flag, the flag ON,
-    // the objective resolved, and the time budget fits). An attempt spends the run's one reflection pass: #90 below is
-    // disqualified exactly as for the terraform form correction. The engine's own text changes ONLY on adoption.
-    let requirementsFormCheck: RequirementsFormCheckStamp | null = null;
-    let requirementsInputs: RequirementsFormInputs | null = null;
-    let requirementsPreCorrectionDraft: string | null = null;
-    let requirementsCorrectionNotAdoptedText: string | null = null;
-    if (isRequirementsFormCheckEligible(agentRole, task.type)) {
-      requirementsInputs = await resolveRequirementsFormInputs(prisma, task.id);
-      const _rq = await runRequirementsFormStep({
-        text: finalResponse, stopReason: loopResult.finalStopReason, inputs: requirementsInputs,
-        correctionTurnUsed,
-        budgetFlagged: !!budgetFailFastUsed || (!!finalResponse && BUDGET_SELF_FLAG_PATTERN.test(finalResponse.slice(0, 1500))),
-        enabled: isRequirementsFormCorrectionEnabled(),
-        deadlineAt, loopStartedAt, currentResponse, messageHistory, totalUsage,
-        prompt, normalizedLlmConfig, mcpFunctions, executionId, userId,
-      }, { generateText: (p, o, u) => llmService.generateText(p, o, u), logger }, observers.requirementsFormCorrection);
-      requirementsFormCheck = _rq.stamp;
-      if (_rq.attempted && typeof _rq.preCorrectionText === 'string') requirementsPreCorrectionDraft = _rq.preCorrectionText;
-      if (_rq.attempted && typeof _rq.notAdoptedText === 'string') requirementsCorrectionNotAdoptedText = _rq.notAdoptedText;
-      if (_rq.stamp.correction.adopted === true) {
-        finalResponse = _rq.text;
-        currentResponse = _rq.currentResponse;
-      }
-      if (_rq.reflectionError) reflectionErrors.push(_rq.reflectionError);
-      // The one reflection pass is spent (#89 > form > #90): the same disqualifier the terraform correction sets, taken
-      // from the turn's OWN outcome (INFO-3), never set before the call.
-      formCorrectionAttempted = formCorrectionAttempted || _rq.attempted;
-      const c = requirementsFormCheck.correction;
-      logger.info({ executionId, taskId: task.id, checked: requirementsFormCheck.checked, attempted: c.attempted,
-        notAttemptedReason: c.notAttemptedReason ?? null, failingChecks: c.failingChecks ?? null,
-        adopted: c.adopted ?? null, notAdoptedReason: c.notAdoptedReason ?? null,
-        objective: requirementsFormCheck.inputs.objective, ownerRowItemMap: requirementsFormCheck.inputs.ownerRowItemMap,
-        inputTokens: c.inputTokens ?? null, outputTokens: c.outputTokens ?? null, durationMs: c.durationMs ?? null },
-        'requirements form check: stamped on toolLoop.requirementsFormCheck');
-    }
-
     // PLATFORM-HELD-BYTES Stage B V-5a/V-5c (2026-10-15): the ONE owning-leg resolution for a non-PIPELINE task (A6) —
     // threaded to the edit step, the capture position, prepareHeldPackage and the nets (a PIPELINE task is its own leg;
     // the nets resolve it lazily through the same function). Never throws. Then the held-edit step: config_change_author on
     // a VARIANT leg only (every other execution: null, result.json byte-identical). An ATTEMPTED correction spends the run's
-    // one reflection pass (#90 disqualified, as for the form and requirements corrections).
+    // one reflection pass (#90 disqualified, as for the form correction).
     let editStep: EditStepResult | null = null;
     if (isEditStepEligible(agentRole ?? null, task.type, owningLeg)) {
       editStep = await runEditApplicationStep(editStepInput(false), resolveHeldFilesFromStore(prisma as never));
@@ -522,16 +471,9 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     }
     // #90 replaced the deliverable ⇒ the PURE applier re-runs on the post-#90 text over the same verified files.
     if (editStep && diagnosticRetryUsed) editStep = recountEditApplication(editStep, finalResponse ?? '', r9Version, persistEchoTokens);
-    if (requirementsFormCheck && requirementsInputs && diagnosticRetryUsed) {
-      requirementsFormCheck = recountRequirementsStamp(requirementsFormCheck, {
-        text: finalResponse, stopReason: currentResponse?.stopReason, inputs: requirementsInputs,
-        onCheckerError: (message) => logger.warn({ executionId, taskId: task.id, err: message },
-          'requirements form check: checker-error on the #90 recount — fact stamped checked:false, execution unaffected'),
-      });
-    }
 
     // G5 (2026-10-10, agent-execution review F1): the persisted endTime / executionTime are taken HERE, after the
-    // post-loop cascade (form correction, requirements correction, #90), so a run's recorded duration includes the
+    // post-loop cascade (form correction, held-edit correction, #90), so a run's recorded duration includes the
     // turns it spent. Taken before 2026-10-10 at loop end, which hid a 2–4 minute re-emission. SERIES CUT (CLAUDE.md).
     const endTime = new Date();
     const executionTime = endTime.getTime() - startTime.getTime();
@@ -677,7 +619,6 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       // F2: the LOOP-EXIT stop reason (never the post-#90 currentResponse's — §3.3).
       finalStopReason: loopResult.finalStopReason,
       ...(formCheck ? { formCheck } : {}),
-      ...(requirementsFormCheck ? { requirementsFormCheck } : {}),
       ...(reflectionErrors.length ? { reflectionErrors } : {}),
       ...(editStep ? { editCorrection: editStep.correction } : {}),
       ...(extensions ? { extensions } : {}),
@@ -905,8 +846,6 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       task: { id: task.id, type: task.type, metadata: task.metadata, povId: task.povId, title: task.title },
       finalText: finalResponse,
       resultJson,
-      ...(requirementsPreCorrectionDraft ? { preCorrectionDraft: requirementsPreCorrectionDraft } : {}),
-      ...(requirementsCorrectionNotAdoptedText ? { correctionNotAdoptedText: requirementsCorrectionNotAdoptedText } : {}),
       ...(heldCaptures && (heldCaptures.refs.length || heldCaptures.refusals.length) ? { heldCaptures } : {}),
       ...(heldVariant ? { heldVariant } : {}),
       logs: executionLogs,

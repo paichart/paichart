@@ -132,12 +132,11 @@
 - .claude/knowledge/pipelines/terraform-iac/**
 - .claude/knowledge/pipelines/network-provisioning/**
 - .claude/knowledge/pipelines/observability/**
-# Exception (Steve, 2026-10-14): the design-decision question registry ships — its rows are already embedded in the
-# exported lib/agents/harness/requirements-form-check.generated.ts, and check-requirements-coverage.py /
-# build-answered-objective.py / test:requirements-form-check-parity read it by path. The rest of the folder stays private.
+# The design-decision question registry STOPPED crossing 2026-11-28 (owner: "drop both from the export"). It shipped from
+# 2026-10-14 because exported code read it; that code was deleted with the retired requirements Author (parcel A), and the
+# public repo should not carry the retired pipeline's records. The whole folder is private.
 # Owner 2026-11-13: marked INTERNAL ONLY in its own first line (file:line references, private pointers) and was public.
 - .claude/knowledge/domain/harness/prompt-injection-answer.md
-+ .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md
 - .claude/knowledge/pipelines/requirements-authoring/**
 # Lab/ingress topology stays private (Steve, 2026-09-27): RIG-HOSTING maps the lab host (LAN IP, ssh login) and the
 # cloudflared -> prod-loopback -> reverse-tunnel ingress path; no secrets, so gitleaks and the IP sweeps pass it.
@@ -159,8 +158,8 @@
 - .claude/knowledge/domain/harness/MARKET-LANDSCAPE-*
 # ── THE FLIP (owner 2026-11-13, docs homologation group 5): the public repository ships the two USER agents and, of
 # .claude/knowledge, only protocols/ and patterns/ ("how this code is developed"). Everything a self-hoster needs was moved
-# into docs/ (cherry-pick groups 1-4). The one other file that crosses is the design-question registry (above): the spec
-# coverage check and two requirements suites read it. The specialist agents, discoveries, domain libraries, the remaining
+# into docs/ (cherry-pick groups 1-4). The one other file that crosses is the design-question registry (above; a retired
+# reference since 2026-11-28 — no code reads it). The specialist agents, discoveries, domain libraries, the remaining
 # pipeline documents, guides, toolkits and workflows stay in the private repository.
 + .claude/README.md
 + .claude/agents/paichart-operator.md
@@ -170,17 +169,9 @@
 + .claude/knowledge/patterns/**
 - .claude/knowledge/**
 - .claude/KNOWLEDGE-BASE-GUIDELINES.md
-# requirements-spec skill (owner 2026-11-13: "we don't use it now" — hand-written specs are the route): the files that MAKE it a
-# skill stop crossing, so Claude Code on a self-host does not offer it. Its `work/` folders still cross: they are the fixtures
-# the exported requirements-check suites read (form-check, form-correction, sources, coverage, citations, clauses).
-- .claude/skills/requirements-spec/SKILL.md
-- .claude/skills/requirements-spec/STEP-BY-STEP.md
-- .claude/skills/requirements-spec/README.md
-- .claude/skills/requirements-spec/scripts/**
-- .claude/skills/requirements-spec/docs/**
-# Skills (requirements-spec work folders: trial drafts, owner answers, findings register) — exported (owner, 2026-10-14);
-# the battery suites read the work folders, so without them public CI fails.
-+ .claude/skills/**
+# requirements-spec skill: NOTHING crosses since 2026-11-28 (owner: "drop both from the export"). Its operative files stopped
+# 2026-11-13; its `work/` folders crossed as test fixtures until the suites that read them were deleted with the retired
+# requirements Author (parcel A). .claude/skills/ is private (the `- .claude/**` rule below).
 - .claude/**
 
 # ── .github: the four fork-safe workflows + PR template (Phase 4) ─────────────────

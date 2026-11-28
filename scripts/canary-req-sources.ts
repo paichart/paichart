@@ -22,8 +22,8 @@ import { checkSources, type Lane } from './check-requirements-sources';
 import {
   contractDeviceSourcesValue, readDeviceSourcesSnapshot, resolveLegDeviceSources, sameDeclaration, type LegDeviceSources,
 } from '../lib/agents/harness/device-sources';
-import { DEVICE_SOURCE_LANES, deviceSourceLaneOf } from '../lib/agents/harness/held-bytes/variant';
-import { contractConfigSourcesValue, resolveLegConfigSources } from '../lib/agents/harness/config-sources';
+import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES, deviceSourceLaneOf } from '../lib/agents/harness/held-bytes/variant';
+import { contractConfigSourcesValue, resolveLegConfigSources, sameConfigDeclaration, type LegConfigSources } from '../lib/agents/harness/config-sources';
 import { printable } from './gate-check-spec';
 
 export type ReqSrcVerdict = 'PASS' | 'UNEXERCISED' | 'FINDING';
@@ -86,6 +86,53 @@ export function contractEqualsSpec(carriers: readonly Carrier[], specText: strin
   }
   if (finding) return { verdict: 'FINDING', lines };
   return exercised ? { verdict: 'PASS', lines } : { verdict: 'UNEXERCISED', lines: [...lines, '  no contract carries a deviceSources key'] };
+}
+
+const describeCfg = (r: LegConfigSources): string => (r.state === 'parsed'
+  ? `parsed ${r.entries.length} line(s) from ${r.source}`
+  : r.state === 'unparseable' ? `unparseable (${r.problem}${r.lineIndex === null ? '' : ` at line ${r.lineIndex + 1}`})` : r.state);
+
+/**
+ * The Config sources counterpart of contractEqualsSpec (2026-11-27, owner: item 4; register follow-on of the 2026-11-21 discovery
+ * finding "nothing compares a spec's Config sources block with the contract"). For every protocol whose legs declare a Config sources
+ * block today (CONFIG_SOURCE_PROTOCOLS: kubernetes-gitops, terraform-iac, observability-config), every carrier's
+ * `configSources["<token>"]` must hold EXACTLY the spec's block for that token (shipping parser, sameConfigDeclaration: line order
+ * and whitespace do not count, a changed, dropped or added line does). A leg of that protocol with no key while the spec gives one is a
+ * finding, as is a key the spec never gave. One block per protocol token (owner 2026-11-15): two DIFFERENT spec blocks for one token
+ * are a finding of the spec. Read-only; facts, no verdict on the run.
+ */
+export function configContractEqualsSpec(carriers: readonly Carrier[], specText: string): ReqSrcResult {
+  const r = checkSources(specText);
+  const lines: string[] = [];
+  let finding = false, exercised = false;
+  r.errors.forEach((e) => { finding = true; lines.push(`  spec ${e.rule}${e.section ? ` [${e.section}]` : ''}: ${e.message} - FINDING (the canary's spec must pass the publish check)`); });
+  const want: Record<string, LegConfigSources> = {};
+  for (const b of r.blocks) {
+    if (b.grammar !== 'config') continue;
+    lines.push(`  spec "${b.section}" line ${b.line}: config ${b.protocol}, ${describeCfg(b.resolution)}`);
+    if (b.resolution.state !== 'parsed') continue;
+    const prev = want[b.protocol];
+    if (prev && !sameConfigDeclaration(prev, b.resolution)) { finding = true; lines.push(`  spec: two different ${b.protocol} blocks (one block per protocol token) - FINDING`); continue; }
+    want[b.protocol] = b.resolution;
+  }
+  for (const protocol of CONFIG_SOURCE_PROTOCOLS) {
+    const key = CONFIG_SOURCE_LANES[protocol].contractKey, spec = want[key];
+    for (const c of carriers) {
+      const raw = contractConfigSourcesValue(c.contract, key);
+      if (raw === undefined || raw === null) {
+        if (spec && c.kind === 'leg' && c.protocol === protocol) { finding = true; lines.push(`  leg ${c.id} (${key}): no configSources["${key}"] while the spec gives ${key} a block - FINDING`); }
+        continue;
+      }
+      exercised = true;
+      const got = resolveLegConfigSources({ protocol: key, contractValue: raw, taskBody: null });
+      if (!spec) { finding = true; lines.push(`  ${c.kind} ${c.id}: configSources["${key}"] = ${describeCfg(got)}, but the spec gives ${key} NO block (invented) - FINDING`); continue; }
+      const same = got.state === 'parsed' && sameConfigDeclaration(got, spec);
+      lines.push(`  ${c.kind} ${c.id}: configSources["${key}"] ${describeCfg(got)} ${same ? '= the spec block' : '≠ the spec block - FINDING'}`);
+      if (!same) finding = true;
+    }
+  }
+  if (finding) return { verdict: 'FINDING', lines };
+  return exercised ? { verdict: 'PASS', lines } : { verdict: 'UNEXERCISED', lines: [...lines, '  no contract carries a configSources key'] };
 }
 
 export function keysParse(carriers: readonly Carrier[]): ReqSrcResult {

@@ -40,7 +40,7 @@ const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-fa
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
 import { HARVEST_LEAF_ROLE_RE } from '../lib/agents/harness/mechanical-nets';
 import * as fs from 'fs';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier, type ObsFactsLeg , readRuleWidened , READ_RULE_WIDENED_PROTOCOLS } from './canary-req-sources';
+import { configContractEqualsSpec, contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier, type ObsFactsLeg , readRuleWidened , READ_RULE_WIDENED_PROTOCOLS } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -50,7 +50,7 @@ const ROOT = many('--root')[0];
 const EXPECT = many('--expect').map(s => { const at = s.lastIndexOf('@'); return { name: s.slice(0, at), version: s.slice(at + 1) }; });
 const CONTROL_NAMES = many('--control');
 const SPEC_PATH = many('--spec')[0];
-const SPEC_CONTROLS = new Set(['req-src-contract-equals-spec', 'req-src-snapshot-contract']);
+const SPEC_CONTROLS = new Set(['req-src-contract-equals-spec', 'req-src-snapshot-contract', 'req-cfg-contract-equals-spec']);
 
 interface TaskRow { id: string; title: string; type: string; status: string; agentRole: string | null; metadata: unknown; stage_id: string | null; created_at: Date; description?: string | null; contract?: unknown }
 interface ExecRow { id: string; taskId: string; status: string; errorCode: string | null; createdAt: Date; logs: string[]; art: string | null; artName: string | null }
@@ -439,6 +439,13 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
   'req-src-contract-equals-spec': {
     what: 'program_architect - every contract carrying deviceSources["network-provisioning"] / ["network-derivation"] holds exactly the --spec block for that lane (shipping parser, sameDeclaration); each leg of a lane the spec gives a block carries it; no key for a lane without a block',
     run: ({ legs, nodeC }) => contractEqualsSpec(carriersOf(legs, nodeC), specText()),
+  },
+  // ── Config sources counterpart (2026-11-27, owner item 4): until now nothing compared a spec's `## Config sources` block with
+  // the contract the Program Architect wrote (csk-contract-carried / cst-tf-facts test presence, not equality). Logic in
+  // canary-req-sources.ts (pure; test:canary-req-sources proves each fault fires).
+  'req-cfg-contract-equals-spec': {
+    what: 'program_architect - for kubernetes-gitops, terraform-iac and observability-config: every contract carrying configSources["<token>"] holds exactly the --spec block for that token (shipping parser, sameConfigDeclaration); a leg of that protocol with no key while the spec gives one, or a key the spec never gave, is a finding',
+    run: ({ legs, nodeC }) => configContractEqualsSpec(carriersOf(legs, nodeC), specText()),
   },
   'req-src-keys-parse': {
     what: 'program_architect - every key under deviceSources on every contract (legs and Node C) is source lines the shipping parser reads as parsed: no prose note, no key that no protocol reads',

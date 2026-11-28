@@ -11,7 +11,7 @@
  * GS3  the companion builder: reach (a one-domain text arm reaches only that domain), model arms reach all, deterministic
  * GS4  the pre-registration check and the lab-text pin check refuse what they must
  * GS5  the scorer, both directions (mutation-pinned): every flip class, the asymmetric masked rule, targets, unscored
- * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 31 stored outcomes (v7: + both requirements legs) (v3: incl. both value legs); one tampered sample ⇒ DO-NOT-SHIP;
+ * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 25 stored outcomes (v14: the two requirements legs retired) (v3: incl. both value legs); one tampered sample ⇒ DO-NOT-SHIP;
  *       v6: the persisted Reviewer cells equal the frozen production rebuild (frozen-cmp) but for two named differences
  * GS7  `run --spend` on an agent-text/model lab with no goldenSet declaration is refused before any call
  */
@@ -61,20 +61,23 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   const GV = `golden-${gs.version}`; const GVP = `${GV}-pin-paichart-paichart-configs`; // the two companion folders of this version
 
   console.log('GS1 the frozen set');
-  await t('loads, every pin unedited (sha256), v13 (v10: the terraform-iac 1.17.0 canary in, three pre-1.17.0 Terraform approve cases retired; v11: + the four-domain program\'s Terraform leg TF-R3; v12: kubernetes-gitops pinned at 1.19.0, K8S-R3 in, K8S-PROG and K8S-BK3 retired; v13: observability-config pinned at 1.12.0, no case moved): 17 cases, 6 protocols, 12 templates; the re-freeze record names every case and every retirement; terraform-iac is pinned at 1.17.0, kubernetes-gitops at 1.19.0, requirements-authoring still at its OLD version on purpose', () => {
-    assert(gs.version === 'v13' && gs.cases.length === 17, `${gs.version} cases ${gs.cases.length}`);
+  await t('loads, every pin unedited (sha256), v13 (v10: the terraform-iac 1.17.0 canary in, three pre-1.17.0 Terraform approve cases retired; v11: + the four-domain program\'s Terraform leg TF-R3; v12: kubernetes-gitops pinned at 1.19.0, K8S-R3 in, K8S-PROG and K8S-BK3 retired; v13: observability-config pinned at 1.12.0, no case moved; v14: the two requirements cases retired with the Author, their pins removed): 15 cases, 5 protocols, 10 templates; the re-freeze record names every case and every retirement; terraform-iac is pinned at 1.17.0, kubernetes-gitops at 1.19.0, requirements-authoring no longer pinned', () => {
+    assert(gs.version === 'v14' && gs.cases.length === 15, `${gs.version} cases ${gs.cases.length}`);
     assert(gs.pins.protocols['terraform-iac-protocol'].version === '1.17.0' && gs.pins.protocols['terraform-iac-protocol'].sha256.startsWith('ed8bdb991631'), 'the terraform-iac pin is the live 1.17.0 text');
     assert(gs.pins.protocols['kubernetes-gitops-protocol'].version === '1.19.0' && gs.pins.protocols['kubernetes-gitops-protocol'].sha256.startsWith('5f51e83c1848'), 'the kubernetes-gitops pin is the live 1.19.0 text (v12)');
-    assert(gs.pins.protocols['requirements-authoring-protocol'].version === '1.10.1', 'the requirements pin stays at 1.10.1 ON PURPOSE (the re-pin is NOT planned: owner 2026-11-19, GOLDEN-REQ-PIN-STALE) — re-pinning it is a new version and an owner decision');
-    assert(Object.keys(gs.pins.protocols).length === 6 && Object.keys(gs.pins.templates).length === 12, 'pins');
+    assert(!gs.pins.protocols['requirements-authoring-protocol'] && !('requirements-authoring-protocol' in gs.heldJoinSeedByProtocol) && !Object.values(gs.pins.templates).some((t) => /^requirements_/.test(t.role)), 'v14: the requirements pins are removed with the retired Author (GOLDEN-REQ-PIN-STALE ends)');
+    assert(Object.keys(gs.pins.protocols).length === 5 && Object.keys(gs.pins.templates).length === 10, 'pins');
     const retired = new Set((gs.refreezes ?? []).flatMap((r) => r.retired ?? []));
-    assert([...retired].sort().join() === 'K8S-BK3,K8S-PROG,TF-C1,TF-PROG,TF-TL2' && gs.refreezes!.find((r) => r.version === 'v10')!.excluded.length === 3 && gs.refreezes!.every((r) => (r.retired ?? []).every((id) => r.excluded.some((x) => x.leg.startsWith(`${id} `)))), 'every retired case is explained in the excluded list of the re-freeze that retired it');
+    assert([...retired].sort().join() === 'K8S-BK3,K8S-PROG,REQ-LOGARCH-F1,REQ-OBS-SENDERS,TF-C1,TF-PROG,TF-TL2' && gs.refreezes!.find((r) => r.version === 'v10')!.excluded.length === 3 && gs.refreezes!.every((r) => (r.retired ?? []).every((id) => r.excluded.some((x) => x.leg.startsWith(`${id} `)))), 'every retired case is explained in the excluded list of the re-freeze that retired it');
     const v11 = gs.refreezes!.find((r) => r.version === 'v11')!;
     assert(v11.version === 'v11' && v11.added.join() === 'TF-R3' && !(v11.retired ?? []).length && v11.excluded.length === 1 && /cmwmvr89l000eyxyka1mkw3a4/.test(v11.excluded[0].leg) && /near-duplicate of TF-C117/.test(v11.excluded[0].why) && /^none/.test(v11.pinsMoved[0]), 'v11: one case added, the git-live twin excluded as a near-duplicate with its reason, no pin moved');
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).filter((id) => !retired.has(id)).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
     assert(gs.refreezes!.at(-1)!.version === gs.version, 'the newest re-freeze names the current version');
-    const v13 = gs.refreezes!.at(-1)!;
+    const v13 = gs.refreezes!.find((r) => r.version === 'v13')!;
+    const v14 = gs.refreezes!.at(-1)!;
+    assert(v14.version === 'v14' && !v14.added.length && (v14.retired ?? []).join() === 'REQ-OBS-SENDERS,REQ-LOGARCH-F1' && v14.excluded.length === 2 && v14.excluded.every((x) => /BECAUSE THE AUTHOR IS RETIRED, not on any flip/.test(x.why)) && /^REMOVED, not moved: requirements-authoring-protocol 1\.10\.1/.test(v14.pinsMoved[0]), 'v14: the two requirements cases retired because the Author is retired (not on a flip), their pins removed');
+    for (const f of ['protocols/requirements-authoring-protocol@1.10.1.md', 'templates/requirements-author.md', 'templates/requirements-reviewer.md', 'owner-maps/REQ-OBS-SENDERS.row-item-map.json']) assert(!fs.existsSync(path.join(GOLDEN_DIR, f)), `v14: ${f} is removed with its case`);
     assert(v13.version === 'v13' && !v13.added.length && !(v13.retired ?? []).length && !v13.excluded.length && /observability-config-protocol 1\.11\.0 → 1\.12\.0 \(4d62c5232e2f\)/.test(v13.pinsMoved[0]), 'v13: the observability re-pin only — no case added, retired or excluded');
     assert(gs.pins.protocols['observability-config-protocol'].version === '1.12.0' && gs.pins.protocols['observability-config-protocol'].sha256.startsWith('4d62c5232e2f'), 'the observability pin is the live 1.12.0 text (v13)');
     const v12 = gs.refreezes!.find((r) => r.version === 'v12')!; const why = (id: string) => v12.excluded.find((x) => x.leg.startsWith(`${id} `))?.why ?? '';
@@ -93,23 +96,16 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     let threw = false; try { loadGoldenSet(d); } catch (e) { threw = /value leg/.test((e as Error).message); }
     assert(threw, 'a value case on a held-bound protocol must be refused');
   });
-  await t('the requirements legs (v7): shape requirements, requirements-authoring 1.10.1 with no held binding, persisted Author only, one approved + one correct refusal; the shape is refused on any other protocol, live form refused, a held seed refused', () => {
-    const rq = gs.cases.filter((c) => c.shape === 'requirements');
-    assert(rq.map((c) => c.id).sort().join() === 'REQ-LOGARCH-F1,REQ-OBS-SENDERS', rq.map((c) => c.id).join());
-    assert(rq.every((c) => c.protocol === REQUIREMENTS_PROTOCOL && c.authorForms.join() === 'persisted' && gs.heldJoinSeedByProtocol[c.protocol] === null), 'requirements case shape');
-    assert(gs.pins.protocols[REQUIREMENTS_PROTOCOL].version === '1.10.1' && gs.pins.protocols[REQUIREMENTS_PROTOCOL].sha256.startsWith('fd4b55a8'), 'requirements pin');
-    assert(rq.map((c) => c.expected.legOutcome).sort().join() === 'approved,needs-revision', 'both directions');
-    assert(caseRoles(rq[0]).author === 'requirements_author' && caseRoles(rq[0]).reviewer === 'requirements_reviewer', 'roles');
+  await t('the requirements shape (v7) stays supported but is EMPTY since v14 (the Author is retired): no requirements case; a requirements case on another protocol, or a live form, is still refused by the loader', () => {
+    assert(!gs.cases.some((c) => c.shape === 'requirements' || c.protocol === REQUIREMENTS_PROTOCOL || c.domain === 'requirements'), 'a requirements case is back: the Author is retired (v14)');
+    assert(caseRoles({ shape: 'requirements' } as GoldenCase).author === 'requirements_author', 'the dormant shape still maps its roles');
     const refused = (mut: (j: any) => void, re: RegExp) => {
       const d = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-set-')); fs.cpSync(GOLDEN_DIR, d, { recursive: true });
       const j = JSON.parse(fs.readFileSync(path.join(d, 'golden-set.json'), 'utf8')); mut(j); fs.writeFileSync(path.join(d, 'golden-set.json'), JSON.stringify(j));
       try { loadGoldenSet(d); return false; } catch (e) { return re.test((e as Error).message); }
     };
-    const req = (j: any) => j.cases.find((c: any) => c.id === 'REQ-OBS-SENDERS');
-    assert(refused((j) => { req(j).authorForms = ['persisted', 'live']; }, /persisted Author only/), 'live form refused');
-    assert(refused((j) => { req(j).protocol = 'network-derivation-protocol'; }, /requirements case/), 'requirements shape on another protocol refused');
-    assert(refused((j) => { j.heldJoinSeedByProtocol[REQUIREMENTS_PROTOCOL] = 'seed-network-provisioning-templates'; }, /requirements leg/), 'held seed refused');
-    assert(refused((j) => { delete req(j).shape; }, /requirements case|requirements leg/), 'a requirements-protocol case without the shape refused');
+    const v = (j: any) => j.cases.find((c: any) => c.id === 'NET-VALUE-C1');
+    assert(refused((j) => { v(j).shape = 'requirements'; }, /requirements case/), 'the requirements shape on another protocol refused');
   });
   await t('both directions in every domain the shared keys ship to (an approved leg AND a needs-revision leg)', () => {
     for (const d of ['network', 'k8s', 'terraform', 'observability']) {
@@ -150,16 +146,15 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const b = buildGoldenCompanion(scratchCopy('obs-text-lab'), gs); const r = b.report;
     assert(b.companions.length === 1 && b.companions[0].pin === 'paichart/paichart-lab-configs' && path.basename(b.dir) === GV, `companions: ${b.companions.map((c) => path.basename(c.dir)).join()}`);
     assert(r.cells.map((c) => `${c.case}:${c.form}`).sort().join(',') === 'OBS-C1:live,OBS-C1:persisted,OBS-DEMO-REF:persisted,OBS-PROG:live,OBS-PROG:persisted', r.cells.map((c) => c.cell).join(','));
-    assert(r.unreached.length === 14 && ['TF-C117', 'TF-R3', 'K8S-R3'].every((id) => r.unreached.some((u) => u.case === id)), `unreached ${r.unreached.length} (the production-pin case must still be reported UNREACHED)`);
+    assert(r.unreached.length === 12 && ['TF-C117', 'TF-R3', 'K8S-R3'].every((id) => r.unreached.some((u) => u.case === id)), `unreached ${r.unreached.length} (the production-pin case must still be reported UNREACHED)`);
     assert(r.targets.join() === 'OBS-DEMO-REF', 'target carried');
   });
-  await t('a model arm reaches every case: 17 Reviewer cells + 10 Author cells (Author-defect refusals, the value legs, NET-C126 and the requirements legs stay persisted), in TWO companions — 21 cells under the lab pin, the 6 of K8S-R3, TF-C117 and TF-R3 under the production pin', () => {
+  await t('a model arm reaches every case: 15 Reviewer cells + 10 Author cells (Author-defect refusals, the value legs and NET-C126 stay persisted), in TWO companions — 19 cells under the lab pin, the 6 of K8S-R3, TF-C117 and TF-R3 under the production pin', () => {
     const b = buildGoldenCompanion(scratchCopy('model-lab'), gs); const r = { cells: famCells(b) };
-    assert(r.cells.filter((c) => c.form === 'persisted').length === 17 && r.cells.filter((c) => c.form === 'live').length === 10, `${r.cells.length}`);
-    assert(b.companions.map((c) => `${path.basename(c.dir)}=${c.pin}:${c.report.cells.length}`).join() === `${GV}=paichart/paichart-lab-configs:21,${GVP}=${PROD_PIN}:6`, b.companions.map((c) => `${path.basename(c.dir)}=${c.pin}:${c.report.cells.length}`).join());
+    assert(r.cells.filter((c) => c.form === 'persisted').length === 15 && r.cells.filter((c) => c.form === 'live').length === 10, `${r.cells.length}`);
+    assert(b.companions.map((c) => `${path.basename(c.dir)}=${c.pin}:${c.report.cells.length}`).join() === `${GV}=paichart/paichart-lab-configs:19,${GVP}=${PROD_PIN}:6`, b.companions.map((c) => `${path.basename(c.dir)}=${c.pin}:${c.report.cells.length}`).join());
     assert(b.companions[1].report.cells.every((c) => ['K8S-R3', 'TF-C117', 'TF-R3'].includes(c.case)) && b.companions.every((c) => c.experiment.requireGitFileSourcePin === c.pin && JSON.stringify(c.report.companions) === JSON.stringify(b.companions[0].report.companions) && c.report.companions!.length === 2), 'each companion requires its pin and lists the whole family');
-    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126', 'REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].includes(c.case)), 'live cell on an Author-defect refusal, the value leg or a requirements leg');
-    assert(['REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].every((id) => r.cells.some((c) => c.case === id && c.form === 'persisted' && c.reach.join() === 'reviewer-model')), 'the requirements Reviewer cells (Reviewer model lever; the Author model lever never reaches a requirements_author)');
+    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].includes(c.case)), 'live cell on an Author-defect refusal or the value leg');
     assert(r.cells.some((c) => c.case === 'NET-VALUE-C1' && c.form === 'persisted' && c.reach.join() === 'reviewer-model'), 'the value leg Reviewer cell (shared infra tier)');
   });
   await t('an Author-only model arm (infraAuthor tier) never reaches the value leg: UNREACHED, named by tier', () => {
@@ -271,13 +266,12 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   });
 
   console.log('GS6 end to end, $0 (--fake-llm persisted over the full companion)');
-  await t('27 cells (17 cases, both Author forms, all four domains + both value legs + both requirements legs, held binding) in TWO companions (one per Git pin, each run in its own process under its own pin) reproduce every stored outcome; one companion\'s run alone reads INCOMPLETE, never PASS; frozen-cmp per cell incl. the Kubernetes §2.2a gate; the held-aware control line; a tampered sample ⇒ DO-NOT-SHIP', () => {
+  await t('25 cells (15 cases, both Author forms, all four domains + both value legs, held binding; v14: the requirements legs retired) in TWO companions (one per Git pin, each run in its own process under its own pin) reproduce every stored outcome; one companion\'s run alone reads INCOMPLETE, never PASS; frozen-cmp per cell incl. the Kubernetes §2.2a gate; the held-aware control line; a tampered sample ⇒ DO-NOT-SHIP', () => {
     const dir = scratchCopy('model-lab');
     const built = buildGoldenCompanion(dir, gs); const comp = built.dir;
     const runDirs = runFamily(built, path.join(path.dirname(dir), 'run-fake')); const runDir = runDirs[0]; // [0] = the default-pin companion's run
     const r = scoreGolden(runDirs, comp, stored, gs);
-    assert(r.cells.length === 27 && runDirs.length === 2, `cells ${r.cells.length} in ${runDirs.length} run(s)`);
-    assert(['REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].every((id) => r.cells.filter((c) => c.case === id).length === 1 && r.cells.filter((c) => c.case === id).every((c) => c.status === 'REPRODUCED')), 'requirements cells (v7)');
+    assert(r.cells.length === 25 && runDirs.length === 2, `cells ${r.cells.length} in ${runDirs.length} run(s)`);
     assert(['NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].every((id) => r.cells.some((c) => c.case === id) && r.cells.filter((c) => c.case === id).every((c) => c.status === 'REPRODUCED')), 'value leg / 1.26.0 canary cells');
     assert(r.verdict.verdict === 'PASS', `${r.verdict.verdict}: ${r.verdict.reasons.join(' | ')}`);
     assert(scoreGolden(runDirs, built.companions[1].dir, stored, gs).verdict.verdict === 'PASS', 'golden-score reads the same family from either companion');
@@ -285,7 +279,7 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const onlyDefault = scoreGolden([runDirs[0]], comp, stored, gs);
     assert(onlyDefault.verdict.verdict === 'INCOMPLETE' && onlyDefault.verdict.reasons.length === 6 && onlyDefault.verdict.reasons.every((x) => /^(TF-(C117|R3)|K8S-R3) /.test(x)), `the default-pin run alone: ${onlyDefault.verdict.verdict} ${onlyDefault.verdict.reasons.join(' | ')}`);
     const onlyProd = scoreGolden([runDirs[1]], built.companions[1].dir, stored, gs);
-    assert(onlyProd.verdict.verdict === 'INCOMPLETE' && onlyProd.verdict.reasons.length === 21, `the production-pin run alone: ${onlyProd.verdict.verdict} (${onlyProd.verdict.reasons.length} unscored)`);
+    assert(onlyProd.verdict.verdict === 'INCOMPLETE' && onlyProd.verdict.reasons.length === 19, `the production-pin run alone: ${onlyProd.verdict.verdict} (${onlyProd.verdict.reasons.length} unscored)`);
     // GOLDEN-REVIEWER-BYTE-FIDELITY (b): a value cell's Reviewer sees the Derivation Architect's STORED containment stamp, as production's did.
     for (const id of ['NET-VALUE-C1', 'NET-VALUE-C126']) {
       const u = fs.readFileSync(path.join(runDir, `GOLD-${id}`, 'gmxnetvaluer', 'reviewer.user.md'), 'utf8');
@@ -297,15 +291,15 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     // K8S-AK5's system prompt (pre-join; the held-join seed's constraint row). Reverting the flag in golden-set.ts reads 13 differing.
     const ce = JSON.parse(fs.readFileSync(path.join(comp, 'experiment.json'), 'utf8'));
     const flagged = built.companions.flatMap((c) => c.experiment.nodes as any[]).filter((n: any) => n.persistedEditApplication).map((n: any) => n.id.replace(/^GOLD-/, '')).sort().join();
-    assert(flagged === gs.cases.filter((c) => !['K8S-AK5', 'NET-VALUE-C1', 'NET-VALUE-C126', 'REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].includes(c.id)).map((c) => c.id).sort().join(), `flagged: ${flagged}`);
+    assert(flagged === gs.cases.filter((c) => !['K8S-AK5', 'NET-VALUE-C1', 'NET-VALUE-C126'].includes(c.id)).map((c) => c.id).sort().join(), `flagged: ${flagged}`);
     let fc = '';
     built.companions.forEach((c, i) => { try { fc += labPin(c.pin, ['frozen-cmp', '--experiment', c.dir, '--run', runDirs[i], '--dump']); } catch (x: any) { fc += String(x.stdout ?? ''); } });
     const differ = [...fc.matchAll(/≠ +GOLD-([A-Z0-9-]+)\//g)].map((x) => x[1]).sort().join();
     // v10: + TF-TL4 — a pre-1.17.0 leg replayed at the 1.17.0 pin with its frozen declaration (the block, the live-evidence fact and the
     // Plan-witness platform line are new in its USER prompt; its system prompt is the pin). TF-C117, the first stored 1.17.0 leg, is
     // byte-identical on both Reviewer prompts AND both Author prompts: production stamped every fact the lab now reproduces.
-    assert(differ === 'K8S-AK5,NET-JL1,NET-JL3,NET-JL4,NET-JP1,REQ-LOGARCH-F1,TF-TL4', `frozen-cmp differs on: ${differ}`);
-    assert((fc.match(/✅/g) ?? []).length === 10, `frozen-cmp identical cells: ${(fc.match(/✅/g) ?? []).length}`);
+    assert(differ === 'K8S-AK5,NET-JL1,NET-JL3,NET-JL4,NET-JP1,TF-TL4', `frozen-cmp differs on: ${differ}`);
+    assert((fc.match(/✅/g) ?? []).length === 9, `frozen-cmp identical cells: ${(fc.match(/✅/g) ?? []).length}`);
     assert(/✅ +GOLD-TF-C117\/\S+: reviewer\.system\.md identical · reviewer\.user\.md identical/.test(fc), 'TF-C117 Reviewer prompts byte-identical to the frozen production rebuild');
     assert(/≠ +GOLD-TF-TL4\/\S+: reviewer\.system\.md identical · reviewer\.user\.md differs/.test(fc), 'TF-TL4 differs in the user prompt only');
     // v11: TF-R3 (state + Git, a consumed value chained from the value leg, a new resource) — byte-identical too, Reviewer and Author, so the
@@ -314,14 +308,6 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     let fat = ''; try { fat = labPin(PROD_PIN, ['frozen-cmp', '--experiment', built.companions[1].dir, '--run', runDirs[1], '--author']); } catch (x: any) { fat = String(x.stdout ?? ''); }
     assert(/✅ +GOLD-TF-C117\/\S+: author\.system\.md identical · author\.user\.md identical/.test(fat), `TF-C117 Author prompts byte-identical: ${fat.slice(-300)}`);
     assert(/✅ +GOLD-TF-R3\/\S+: author\.system\.md identical · author\.user\.md identical/.test(fat), `TF-R3 Author prompts byte-identical: ${fat.slice(-300)}`);
-    // v7 (§2.2a fidelity gate, owner-accepted exception): REQ-OBS-SENDERS is byte-identical; REQ-LOGARCH-F1 (authored under 1.8.0) differs
-    // in the SYSTEM prompt only, on exactly two lines — today's requirements_reviewer guidance 8.1 and 8.4.
-    assert(/✅ +GOLD-REQ-OBS-SENDERS\/\S+: reviewer\.system\.md identical · reviewer\.user\.md identical/.test(fc), 'REQ-OBS-SENDERS byte-identical');
-    assert(/≠ +GOLD-REQ-LOGARCH-F1\/\S+: reviewer\.system\.md differs · reviewer\.user\.md identical/.test(fc), 'REQ-LOGARCH-F1 differs in the system prompt only');
-    const rqd = path.join(runDir, 'GOLD-REQ-LOGARCH-F1', fs.readdirSync(path.join(runDir, 'GOLD-REQ-LOGARCH-F1')).find((x) => /^g\w+requirementsr$/.test(x))!);
-    const fl = fs.readFileSync(path.join(rqd, 'frozen.reviewer.system.md'), 'utf8').split('\n'); const cl = fs.readFileSync(path.join(rqd, 'reviewer.system.md'), 'utf8').split('\n');
-    const dl = cl.map((l, i) => (l !== fl[i] ? l.trim().slice(0, 4) : null)).filter((x) => x !== null);
-    assert(fl.length === cl.length && dl.join() === '8.1 ,8.4 ', `REQ-LOGARCH-F1 system lines differing: ${dl.join(' | ')} (lengths ${fl.length}/${cl.length})`);
     // golden v12 (2026-11-19) — the KUBERNETES frozen-cmp gate at the 1.19.0 pin (Config sources STEP 2 §2.2a), named cell by cell.
     //   K8S-R3 (a stored 1.19.0 leg, production pin): BYTE-IDENTICAL on both Reviewer prompts and both Author prompts. Production stamped
     //     its Config-sources snapshot, its drift call record and its Git-vs-live drift fact; the lab reads them as stamped (`already-stamped`)

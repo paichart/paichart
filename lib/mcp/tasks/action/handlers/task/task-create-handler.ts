@@ -339,8 +339,11 @@ export async function handleTaskCreate(
   let finalPhaseId = phaseId;
   let finalStageId = null;
 
-  // If povId is provided but no phaseId, try to find the appropriate phase
-  if (povId && !finalPhaseId) {
+  // If povId is provided but no phaseId, try to find the appropriate phase.
+  // NOT when the caller named the phase (phaseName): the stage resolver owns that
+  // lookup and refuses an unknown name. Pre-resolving here put a NEW stageName in
+  // the PLANNING/first phase instead (TASK-CREATE-PHASENAME-IGNORED-ON-NEW-STAGE, 2026-11-27).
+  if (povId && !finalPhaseId && !phaseName) {
     mcpLogger.debug({ povId }, 'No phaseId provided, resolving phase');
 
     // ============================================================================
@@ -391,7 +394,9 @@ export async function handleTaskCreate(
         phaseId: finalPhaseId,
         phaseName: phaseName,
         povId: povId,
-        title: title // For auto-creation context
+        title: title, // For auto-creation context
+        // A phaseId the platform chose above is a default, not the caller's choice.
+        phaseIsDefault: !callerSuppliedPhaseId && !!finalPhaseId,
       });
 
       // task #92 invariant: if caller supplied phaseId, the resolved stage

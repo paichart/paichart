@@ -109,10 +109,8 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'HS-FU5 test fixture: asserts the marker-mandating infra protocols are NOT none; the retired obs variant is deliberately absent from the projection (see PROTOCOL_MARKER_MANDATES)',
   'scripts/test-protocol-marker-mandates.ts::variants':
     'HS-FU5 byte-identity fixture over the live infra protocols; the retired obs variant is unknown to the projection by design and is covered by the unknown-protocol row',
-  'lib/agents/harness/requirements-coverage.ts::LEG_TOKENS':
-    'Phase 10: held is a capability OF the obs token, not a token — generated specs key obs rows on observability-config and never name the retired variant token (PH-6 inventory P-6)',
-  'lib/agents/harness/requirements-clauses.ts::TOKENS': 'the requirements token family — same reason as requirements-coverage LEG_TOKENS (Phase 10: held is a capability of the obs token)',
-  'lib/agents/harness/requirements-citations.ts::TOKENS': 'the requirements token family — same reason as requirements-coverage LEG_TOKENS (Phase 10: held is a capability of the obs token)',
+  'lib/agents/harness/spec-check-shared.ts::LEG_TOKENS':
+    'Phase 10: held is a capability OF the obs token, not a token — specs key obs rows on observability-config and never name the retired variant token (PH-6 inventory P-6). Moved 2026-11-28 from requirements-coverage.ts (parcel A; requirements-clauses/-citations TOKENS deleted with their modules)',
   'lib/agents/harness/protocol-dependence-anchors.ts::PROTOCOL_DEPENDENCE_ANCHORS':
     'Phase 10: the variant row is a DEPRECATED tombstone that composes nothing, so it carries no base-dependence anchors (value-chain-program tombstone precedent)',
   'scripts/render-public-protocols.ts::PROTOCOLS':
@@ -131,6 +129,7 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'VALUE-LEG-GIT LE21 fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys — a contract shape, not a protocol selection; obs declares no device sources',
   'scripts/test-canary-req-sources.ts::GOOD':
     'first generated network spec canary (2026-11-10) fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys - a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/test-canary-req-sources.ts::CFG_GOOD': 'Config sources canary control (2026-11-27) fixture: an interfaceContract.configSources keyed by the config protocols\' own contract keys (terraform-iac, kubernetes-gitops) - a contract shape, not a protocol selection; the held variant is a capability of observability-config, not a key',
   'scripts/test-canary-req-sources.ts::<top>':
     'first generated network spec canary (2026-11-10) fixtures: leg carriers stamped with the network protocols (value and change lane) and contracts keyed by their contract keys - a contract shape, not a protocol selection; obs declares no device sources',
   'lib/agents/harness/config-sources-read-rule.ts::CONFIG_SOURCES_READ_RULE_PROTOCOLS':
