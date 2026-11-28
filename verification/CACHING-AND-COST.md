@@ -1,6 +1,6 @@
 # Token economics of an autonomous pipeline — what we cache, and what we don't
 
-**Last measured**: 2026-08-29 · Companion to `METHODOLOGY.md`
+**Last measured**: 2026-11-28 · Companion to `METHODOLOGY.md`
 
 Autonomous multi-agent delivery has an unusual cost shape, and most of what determines the bill is
 decided before a single token is generated. This document states what pAIchart does about it, what
@@ -44,11 +44,11 @@ Measured across 30 days of production execution:
 
 | tier | cache written per execution | cache read per execution | amortisation |
 |---|---:|---:|---:|
-| pipeline harness | ~89,000 tokens | ~918,000 tokens | **~10×** |
-| specialist agent | ~46,000 tokens | ~153,000 tokens | ~3× |
+| pipeline harness | ~85,000 tokens | ~795,000 tokens | **~9×** |
+| specialist agent | ~59,000 tokens | ~101,000 tokens | ~2× |
 
 Read the pipeline row as a statement about turns: an execution pays to establish its cache once, then
-reads it back about ten times over the course of its own reasoning. **That ratio is the turn count**
+reads it back about nine times over the course of its own reasoning. **That ratio is the turn count**
 — we do not assert it separately, we observe it in the billing. It is why a long agentic run does not
 cost ten times a short one, and it is where the majority of the platform's token efficiency comes
 from today.
@@ -103,7 +103,7 @@ efficiency claim you cannot see the boundary of is not a claim you can evaluate.
 
 What we will state plainly:
 
-- **Within a run, caching works and is measured** — ~10× amortisation on pipeline executions.
+- **Within a run, caching works and is measured** — ~9× amortisation on pipeline executions.
 - **Across runs, it currently does not** — measured, reproducible, and open.
 - **The fix is proven at the mechanism level and unproven at the implementation level.** Those are
   different things, and we would rather say so than collapse them.
